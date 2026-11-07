@@ -1,0 +1,9 @@
+/.git/
+/.github/
+/_build/
+/target/
+/.venv/
+/node_modules/
+/tests/generated/
+__pycache__/
+/release-local/

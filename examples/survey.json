@@ -1,0 +1,29 @@
+{
+  "moondta_exchange": 1,
+  "schema": {
+    "version": 118,
+    "endian": "Little",
+    "label": "合成问卷示例",
+    "timestamp": "07 Nov 2026 12:00",
+    "columns": [
+      {"name": "id", "storage": "Int32", "label": "编号", "format": "%12.0g", "value_labels": ""},
+      {"name": "回答", "storage": "Byte", "label": "是否满意", "format": "%8.0g", "value_labels": "answer"},
+      {"name": "score", "storage": "Float64", "label": "评分", "format": "%9.2f", "value_labels": ""},
+      {"name": "备注", "storage": "StrL", "label": "访谈记录", "format": "%20s", "value_labels": ""}
+    ],
+    "sort_order": [1],
+    "value_labels": [
+      {"name": "answer", "entries": [
+        {"value": 0, "text": "否"},
+        {"value": 1, "text": "是"},
+        {"value": 2147483622, "text": "拒绝回答"}
+      ]}
+    ],
+    "characteristics": []
+  },
+  "rows": [
+    [{"int": 1}, {"int": 1}, {"number_bits": "3ff8000000000000"}, {"text": "中文与 Unicode 😀"}],
+    [{"int": 2}, {"missing": 1}, {"missing": 0}, {"text": "保留 .a 与普通缺失的区别"}],
+    [{"int": 3}, {"int": 0}, {"number_bits": "8000000000000000"}, {"text": "负零也能原样交换"}]
+  ]
+}

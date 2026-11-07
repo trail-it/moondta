@@ -1,0 +1,7 @@
+/_build/
+/target/
+/.venv/
+/tests/generated/
+/node_modules/
+__pycache__/
+/release-local/

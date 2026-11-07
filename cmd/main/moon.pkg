@@ -1,0 +1,9 @@
+import {
+  "local/moondta" @dta,
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/json",
+}
+
+pkgtype(kind: "executable")
+
+supported_targets = "js"

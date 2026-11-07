@@ -1,0 +1,101 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "local/moondta"
+
+import {
+  "moonbitlang/core/debug",
+  "moonbitlang/core/json",
+}
+
+// Values
+pub fn encode(Dataset) -> Bytes raise DtaError
+
+pub fn from_exchange(Json) -> Dataset raise DtaError
+
+pub fn open(Bytes) -> Reader raise DtaError
+
+// Errors
+pub(all) suberror DtaError {
+  Invalid(offset~ : Int, message~ : String)
+} derive(@debug.Debug)
+
+// Types and methods
+pub(all) struct Characteristic {
+  variable : String
+  name : String
+  data : Bytes
+} derive(Eq, @debug.Debug)
+
+pub(all) struct Column {
+  name : String
+  storage : Storage
+  label : String
+  format : String
+  value_labels : String
+} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+pub fn Column::new(String, Storage, label? : String, format? : String, value_labels? : String) -> Self
+
+pub(all) struct Dataset {
+  schema : Schema
+  rows : Array[Array[Value]]
+} derive(Eq, @debug.Debug)
+pub fn Dataset::to_exchange(Self) -> Json
+
+pub(all) enum Endian {
+  Little
+  Big
+} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+
+pub(all) struct LabelEntry {
+  value : Int
+  text : String
+} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+
+pub(all) struct LabelSet {
+  name : String
+  entries : Array[LabelEntry]
+} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+
+pub struct Reader {
+  // private fields
+}
+pub fn Reader::inspect_json(Self) -> Json
+pub fn Reader::read(Self) -> Dataset raise DtaError
+pub fn Reader::read_rows(Self, offset? : Int, limit? : Int, columns? : Array[Int]) -> Array[Array[Value]] raise DtaError
+pub fn Reader::row_count(Self) -> Int
+pub fn Reader::schema(Self) -> Schema
+pub fn Reader::select(Self, Array[Int], offset? : Int, limit? : Int) -> Dataset raise DtaError
+
+pub(all) struct Schema {
+  version : Int
+  endian : Endian
+  label : String
+  timestamp : String
+  columns : Array[Column]
+  sort_order : Array[Int]
+  value_labels : Array[LabelSet]
+  characteristics : Array[Characteristic]
+} derive(Eq, @debug.Debug)
+pub fn Schema::new(Array[Column], version? : Int, endian? : Endian, label? : String, timestamp? : String, sort_order? : Array[Int], value_labels? : Array[LabelSet], characteristics? : Array[Characteristic]) -> Self
+
+pub(all) enum Storage {
+  Byte
+  Int16
+  Int32
+  Float32
+  Float64
+  Str(Int)
+  StrL
+} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+pub fn Storage::width(Self) -> Int raise DtaError
+
+pub(all) enum Value {
+  Integer(Int)
+  Number(Double)
+  Text(String)
+  Binary(Bytes)
+  Missing(Int)
+} derive(Eq, @debug.Debug)
+
+// Type aliases
+
+// Traits
