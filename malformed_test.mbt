@@ -55,7 +55,7 @@ test "strL references, payload kind, terminator and binary are distinguished" {
   let gso = find_tag(b, "GSO")
   rejects(() => ignore(open(put_uint(b, gso + 15, 128, 1))))
   rejects(() => ignore(open(put_uint(b, gso + 23, 42, 1))))
-  rejects(() => ignore(open(put_uint(b, gso + 21, 0, 1))))
+  rejects(() => open(put_uint(b, gso + 21, 0, 1)).verify())
   let binary = put_uint(b, gso + 15, 129, 1)
   assert_eq(open(binary).read_rows(), [[Binary(b"abc\x00")]])
 }

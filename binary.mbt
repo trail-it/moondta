@@ -89,20 +89,23 @@ fn Cursor::cstring(
 
 ///|
 priv struct Sink {
-  bytes : Array[Byte]
+  bytes : @buffer.Buffer
   endian : Endian
 }
 
 ///|
 fn Sink::new(endian : Endian) -> Sink {
-  { bytes: [], endian, }
+  { bytes: @buffer.Buffer(), endian, }
 }
 
 ///|
 fn Sink::raw(self : Sink, bytes : BytesView) -> Unit {
-  for b in bytes {
-    self.bytes.push(b)
-  }
+  self.bytes.write_bytes(bytes)
+}
+
+///|
+fn Sink::append(self : Sink, other : Sink) -> Unit {
+  self.bytes.write_iter(other.bytes.view().iter())
 }
 
 ///|
@@ -114,7 +117,7 @@ fn Sink::text(self : Sink, s : String) -> Unit {
 fn Sink::uint(self : Sink, value : UInt64, n : Int) -> Unit {
   for i in 0..<n {
     let shift = if self.endian == Little { i * 8 } else { (n - i - 1) * 8 }
-    self.bytes.push((value >> shift).to_byte())
+    self.bytes.write_byte((value >> shift).to_byte())
   }
 }
 
@@ -126,13 +129,8 @@ fn Sink::fixed(self : Sink, s : String, n : Int) -> Unit raise DtaError {
   }
   self.raw(b[:])
   for _ in b.length()..<n {
-    self.bytes.push(0)
+    self.bytes.write_byte(0)
   }
-}
-
-///|
-fn Sink::finish(self : Sink) -> Bytes {
-  Bytes::from_array(self.bytes[:])
 }
 
 ///|

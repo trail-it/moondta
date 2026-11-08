@@ -6,7 +6,7 @@ from zipfile import ZipFile
 
 ROOT = Path(__file__).resolve().parents[1]
 subprocess.run(["moon", "package"], cwd=ROOT, check=True)
-archive = ROOT / "_build/publish/local-moondta-0.1.0.zip"
+archive = ROOT / "_build/publish/local-moondta-0.2.0.zip"
 
 with tempfile.TemporaryDirectory(prefix="moondta-consumer-") as directory:
     root = Path(directory).resolve()
@@ -25,7 +25,7 @@ with tempfile.TemporaryDirectory(prefix="moondta-consumer-") as directory:
                            for part in Path(name).parts), name
         package.extractall(library)
     (root / "moon.work").write_text('members = ["library", "consumer"]\n', encoding="utf-8")
-    (consumer / "moon.mod").write_text('name = "consumer/check"\nimport { "local/moondta@0.1.0" }\n', encoding="utf-8")
+    (consumer / "moon.mod").write_text('name = "consumer/check"\nimport { "local/moondta@0.2.0" }\n', encoding="utf-8")
     (consumer / "moon.pkg").write_text('import { "local/moondta" @dta } for "test"\n', encoding="utf-8")
     (consumer / "consumer_test.mbt").write_text((ROOT / "api_test.mbt").read_text(encoding="utf-8"), encoding="utf-8")
     for target in ("js", "wasm-gc"):

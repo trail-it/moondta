@@ -7,7 +7,14 @@ pub struct Reader {
   priv data_start : Int
   priv row_width : Int
   priv column_offsets : Array[Int]
-  priv strls : Map[(UInt64, UInt64), Value]
+  priv strls : Map[(UInt64, UInt64), StrLObject]
+}
+
+///|
+priv struct StrLObject {
+  kind : Int
+  start : Int
+  length : Int
 }
 
 ///|
@@ -178,7 +185,7 @@ pub fn open(bytes : Bytes) -> Reader raise DtaError {
     invalid(data.pos, "row count and storage widths do not match data size")
   }
   let gso = section(bytes, offsets, 10, "strls", endian)
-  let strls : Map[(UInt64, UInt64), Value] = Map([])
+  let strls : Map[(UInt64, UInt64), StrLObject] = Map([])
   while gso.pos < gso.end {
     gso.tag("GSO")
     let v = gso.uint(4)
@@ -192,22 +199,15 @@ pub fn open(bytes : Bytes) -> Reader raise DtaError {
     let kind = gso.size(1)
     let len = gso.size(4)
     let payload = gso.take(len)
-    let value = match kind {
-      129 => Binary(payload.to_owned())
-      130 => {
+    match kind {
+      129 => ()
+      130 =>
         if len == 0 || payload[len - 1] != 0 {
           invalid(gso.pos - len, "strL text must end in NUL")
         }
-        for i in 0..<(len - 1) {
-          if payload[i] == 0 {
-            invalid(gso.pos - len + i, "strL text contains embedded NUL")
-          }
-        }
-        Text(decode_utf8(payload[:len - 1], gso.pos - len))
-      }
       _ => raise Invalid(offset=gso.pos - len - 5, message="unknown strL kind")
     }
-    strls[(v, o)] = value
+    strls[(v, o)] = { kind, start: gso.pos - len, length: len, }
   }
   let vl = section(bytes, offsets, 11, "value_labels", endian)
   let value_labels : Array[LabelSet] = []
@@ -270,6 +270,45 @@ pub fn Reader::row_count(self : Reader) -> Int {
 }
 
 ///|
+fn Reader::read_strl(
+  self : Reader,
+  object : StrLObject,
+) -> Value raise DtaError {
+  let payload = self.bytes[object.start:object.start + object.length]
+  if object.kind == 129 {
+    return Binary(payload.to_owned())
+  }
+  for i in 0..<(object.length - 1) {
+    if payload[i] == 0 {
+      invalid(object.start + i, "strL text contains embedded NUL")
+    }
+  }
+  Text(decode_utf8(payload[:object.length - 1], object.start))
+}
+
+///|
+/// Scan every strL object (including unreferenced objects) and every cell.
+/// Decoded values are discarded per batch; original file bytes remain in memory.
+pub fn Reader::verify(
+  self : Reader,
+  batch_size? : Int = 256,
+) -> Unit raise DtaError {
+  if batch_size < 1 {
+    invalid(0, "batch size must be positive")
+  }
+  for object in self.strls.values() {
+    ignore(self.read_strl(object))
+  }
+  let mut offset = 0
+  while offset < self.count {
+    let remaining = self.count - offset
+    let limit = if batch_size < remaining { batch_size } else { remaining }
+    ignore(self.read_rows(offset~, limit~))
+    offset += limit
+  }
+}
+
+///|
 pub fn Reader::schema(self : Reader) -> Schema {
   clone_schema(self.metadata)
 }
@@ -300,6 +339,8 @@ pub fn Reader::read_rows(
     invalid(0, "row range outside dataset")
   }
   let indices = self.indices(columns)
+  // Reuse shared objects only for this batch; Reader never retains decoded text.
+  let cache : Map[(UInt64, UInt64), Value] = Map([])
   Array::makei(limit, r => {
     let base = self.data_start + (offset + r) * self.row_width
     indices.map(i => {
@@ -308,7 +349,7 @@ pub fn Reader::read_rows(
         self.metadata.endian,
         start=base + self.column_offsets[i],
       )
-      self.read_cell(c, self.metadata.columns[i].storage)
+      self.read_cell(c, self.metadata.columns[i].storage, cache)
     })
   })
 }
@@ -376,6 +417,7 @@ fn Reader::read_cell(
   self : Reader,
   c : Cursor,
   storage : Storage,
+  cache : Map[(UInt64, UInt64), Value],
 ) -> Value raise DtaError {
   let p = c.pos
   match storage {
@@ -387,8 +429,15 @@ fn Reader::read_cell(
       if v == 0 && o == 0 {
         Text("")
       } else {
+        if cache.get((v, o)) is Some(value) {
+          return value
+        }
         match self.strls.get((v, o)) {
-          Some(value) => value
+          Some(object) => {
+            let value = self.read_strl(object)
+            cache[(v, o)] = value
+            value
+          }
           None => raise Invalid(offset=p, message="unresolved strL reference")
         }
       }

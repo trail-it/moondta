@@ -58,12 +58,15 @@ pub(all) struct LabelSet {
 pub struct Reader {
   // private fields
 }
+pub fn Reader::describe(Self) -> String
 pub fn Reader::inspect_json(Self) -> Json
+pub fn Reader::preview(Self, offset? : Int, limit? : Int, columns? : Array[Int], max_chars? : Int, labels? : Bool) -> String raise DtaError
 pub fn Reader::read(Self) -> Dataset raise DtaError
 pub fn Reader::read_rows(Self, offset? : Int, limit? : Int, columns? : Array[Int]) -> Array[Array[Value]] raise DtaError
 pub fn Reader::row_count(Self) -> Int
 pub fn Reader::schema(Self) -> Schema
 pub fn Reader::select(Self, Array[Int], offset? : Int, limit? : Int) -> Dataset raise DtaError
+pub fn Reader::verify(Self, batch_size? : Int) -> Unit raise DtaError
 
 pub(all) struct Schema {
   version : Int
@@ -86,6 +89,7 @@ pub(all) enum Storage {
   Str(Int)
   StrL
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+pub fn Storage::display_name(Self) -> String
 pub fn Storage::width(Self) -> Int raise DtaError
 
 pub(all) enum Value {

@@ -4,7 +4,7 @@ extern "js" fn args() -> FixedArray[String] =
 
 ///|
 extern "js" fn read_file(path : String) -> Bytes? =
-  #| (path) => { try { const fs = require('node:fs'); const s = fs.statSync(path); if (!s.isFile() || s.size > 536870912) return undefined; return new Uint8Array(fs.readFileSync(path)); } catch { return undefined; } }
+  #| (path) => { try { const fs = require('node:fs'); const s = fs.statSync(path); if (!s.isFile() || s.size > 536870912) return undefined; return fs.readFileSync(path); } catch { return undefined; } }
 
 ///|
 extern "js" fn write_file(path : String, data : Bytes) -> String? =
@@ -55,6 +55,8 @@ fn help() -> Unit {
     (
       #|MoonDTA — Stata DTA 118/119
       #|  inspect INPUT.dta
+      #|  describe INPUT.dta
+      #|  preview INPUT.dta [--columns a,b] [--offset N] [--limit N] [--width N] [--labels on|off]
       #|  verify INPUT.dta [--batch-size N]
       #|  export INPUT.dta OUTPUT.json [--columns a,b] [--offset N] [--limit N]
       #|  import INPUT.json OUTPUT.dta [--version 118|119] [--endian little|big]
@@ -74,7 +76,14 @@ fn run() -> Unit raise {
     return
   }
   let command = argv[0]
-  let header = if command == "inspect" || command == "verify" { 2 } else { 3 }
+  let header = if command == "inspect" ||
+    command == "verify" ||
+    command == "preview" ||
+    command == "describe" {
+    2
+  } else {
+    3
+  }
   if argv.length() < header {
     fail("missing arguments; run --help")
   }
@@ -89,6 +98,12 @@ fn run() -> Unit raise {
       "verify" => key == "--batch-size"
       "export" | "select" =>
         key == "--columns" || key == "--offset" || key == "--limit"
+      "preview" =>
+        key == "--columns" ||
+        key == "--offset" ||
+        key == "--limit" ||
+        key == "--width" ||
+        key == "--labels"
       "import" | "convert" => key == "--version" || key == "--endian"
       _ => false
     }
@@ -108,6 +123,8 @@ fn run() -> Unit raise {
     command != "verify" &&
     command != "export" &&
     command != "select" &&
+    command != "preview" &&
+    command != "describe" &&
     command != "convert" {
     fail("unknown command: \{command}")
   }
@@ -116,18 +133,16 @@ fn run() -> Unit raise {
     println(reader.inspect_json().stringify(indent=2))
     return
   }
+  if command == "describe" {
+    println(reader.describe())
+    return
+  }
   if command == "verify" {
-    let batch = number(options.get("--batch-size").unwrap_or("4096"))
+    let batch = number(options.get("--batch-size").unwrap_or("256"))
     if batch < 1 {
       fail("batch size must be positive")
     }
-    let mut offset = 0
-    while offset < reader.row_count() {
-      let remaining = reader.row_count() - offset
-      let count = if batch < remaining { batch } else { remaining }
-      ignore(reader.read_rows(offset~, limit=count))
-      offset += count
-    }
+    reader.verify(batch_size=batch)
     println(
       "Verified \{reader.row_count()} rows, \{reader.schema().columns.length()} variables",
     )
@@ -164,7 +179,17 @@ fn run() -> Unit raise {
   let offset = number(options.get("--offset").unwrap_or("0"))
   let limit = match options.get("--limit") {
     Some(s) => number(s)
-    None => reader.row_count() - offset
+    None => if command == "preview" { 10 } else { reader.row_count() - offset }
+  }
+  if command == "preview" {
+    let width = number(options.get("--width").unwrap_or("60"))
+    let labels = match options.get("--labels").unwrap_or("on") {
+      "on" => true
+      "off" => false
+      _ => fail("labels must be on or off")
+    }
+    println(reader.preview(offset~, limit~, columns~, max_chars=width, labels~))
+    return
   }
   let data = reader.select(columns, offset~, limit~)
   let bytes = if command == "export" {

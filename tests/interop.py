@@ -152,7 +152,7 @@ def synthetic(directory):
 
 
 def official(directory):
-    for name in ("auto", "datexmpl2"):
+    for name in ("auto", "auto2", "datexmpl2"):
         url = f"https://www.stata-press.com/data/r18/{name}.dta"
         cache = ROOT / "tests/generated"
         cache.mkdir(exist_ok=True)

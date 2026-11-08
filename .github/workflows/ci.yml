@@ -29,5 +29,6 @@ jobs:
       - run: moon build --target js
       - run: python -m pip install -r tests/requirements.txt
       - run: python tests/interop.py
+      - run: python tests/compat_interop.py
       - run: python tests/wide.py
       - run: python tests/package_consumer.py

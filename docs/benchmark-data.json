@@ -1,0 +1,295 @@
+{
+  "date": "2026-11-07",
+  "baseline_commit": "6cfb8b8",
+  "baseline": {
+    "label": "0.1.0",
+    "results": [
+      {
+        "exit_code": 0,
+        "seconds": 0.0505366,
+        "peak_rss_mib": 76.10546875,
+        "node": "v24.19.0",
+        "platform": "win32",
+        "workload": "long-8mib",
+        "file_mib": 8.031046867370605,
+        "command": "inspect"
+      },
+      {
+        "exit_code": 0,
+        "seconds": 0.0535263,
+        "peak_rss_mib": 76.1875,
+        "node": "v24.19.0",
+        "platform": "win32",
+        "workload": "long-8mib",
+        "file_mib": 8.031046867370605,
+        "command": "select"
+      },
+      {
+        "exit_code": 0,
+        "seconds": 0.0571075,
+        "peak_rss_mib": 76.5625,
+        "node": "v24.19.0",
+        "platform": "win32",
+        "workload": "long-8mib",
+        "file_mib": 8.031046867370605,
+        "command": "verify"
+      },
+      {
+        "exit_code": 0,
+        "seconds": 0.3220528,
+        "peak_rss_mib": 357.3671875,
+        "node": "v24.19.0",
+        "platform": "win32",
+        "workload": "long-8mib",
+        "file_mib": 8.031046867370605,
+        "command": "convert"
+      },
+      {
+        "exit_code": 0,
+        "seconds": 0.1177726,
+        "peak_rss_mib": 123.4296875,
+        "node": "v24.19.0",
+        "platform": "win32",
+        "workload": "long-32mib",
+        "file_mib": 32.118937492370605,
+        "command": "inspect"
+      },
+      {
+        "exit_code": 0,
+        "seconds": 0.1091722,
+        "peak_rss_mib": 123.19140625,
+        "node": "v24.19.0",
+        "platform": "win32",
+        "workload": "long-32mib",
+        "file_mib": 32.118937492370605,
+        "command": "select"
+      },
+      {
+        "exit_code": 0,
+        "seconds": 0.1184392,
+        "peak_rss_mib": 131.64453125,
+        "node": "v24.19.0",
+        "platform": "win32",
+        "workload": "long-32mib",
+        "file_mib": 32.118937492370605,
+        "command": "verify"
+      },
+      {
+        "exit_code": 0,
+        "seconds": 1.6911793,
+        "peak_rss_mib": 1739,
+        "node": "v24.19.0",
+        "platform": "win32",
+        "workload": "long-32mib",
+        "file_mib": 32.118937492370605,
+        "command": "convert"
+      },
+      {
+        "exit_code": 0,
+        "seconds": 0.0570688,
+        "peak_rss_mib": 80.296875,
+        "node": "v24.19.0",
+        "platform": "win32",
+        "workload": "numeric-200000",
+        "file_mib": 12.212443351745605,
+        "command": "inspect"
+      },
+      {
+        "exit_code": 0,
+        "seconds": 0.0596234,
+        "peak_rss_mib": 80.1875,
+        "node": "v24.19.0",
+        "platform": "win32",
+        "workload": "numeric-200000",
+        "file_mib": 12.212443351745605,
+        "command": "select"
+      },
+      {
+        "exit_code": 0,
+        "seconds": 0.4323464,
+        "peak_rss_mib": 101.77734375,
+        "node": "v24.19.0",
+        "platform": "win32",
+        "workload": "numeric-200000",
+        "file_mib": 12.212443351745605,
+        "command": "verify"
+      },
+      {
+        "exit_code": 0,
+        "seconds": 1.1276584,
+        "peak_rss_mib": 548.4375,
+        "node": "v24.19.0",
+        "platform": "win32",
+        "workload": "numeric-200000",
+        "file_mib": 12.212443351745605,
+        "command": "convert"
+      }
+    ]
+  },
+  "current_version": "0.2.0",
+  "current": {
+    "label": "optimized-final",
+    "results": [
+      {
+        "exit_code": 0,
+        "seconds": 0.0485372,
+        "peak_rss_mib": 54.109375,
+        "node": "v24.19.0",
+        "platform": "win32",
+        "workload": "long-8mib",
+        "file_mib": 8.031046867370605,
+        "command": "inspect"
+      },
+      {
+        "exit_code": 0,
+        "seconds": 0.0336722,
+        "peak_rss_mib": 53.7890625,
+        "node": "v24.19.0",
+        "platform": "win32",
+        "workload": "long-8mib",
+        "file_mib": 8.031046867370605,
+        "command": "select"
+      },
+      {
+        "exit_code": 0,
+        "seconds": 0.0774214,
+        "peak_rss_mib": 64.8515625,
+        "node": "v24.19.0",
+        "platform": "win32",
+        "workload": "long-8mib",
+        "file_mib": 8.031046867370605,
+        "command": "verify"
+      },
+      {
+        "exit_code": 0,
+        "seconds": 0.276337,
+        "peak_rss_mib": 117.953125,
+        "node": "v24.19.0",
+        "platform": "win32",
+        "workload": "long-8mib",
+        "file_mib": 8.031046867370605,
+        "command": "convert"
+      },
+      {
+        "exit_code": 0,
+        "seconds": 0.0546202,
+        "peak_rss_mib": 79.640625,
+        "node": "v24.19.0",
+        "platform": "win32",
+        "workload": "long-32mib",
+        "file_mib": 32.118937492370605,
+        "command": "inspect"
+      },
+      {
+        "exit_code": 0,
+        "seconds": 0.0548059,
+        "peak_rss_mib": 80.30859375,
+        "node": "v24.19.0",
+        "platform": "win32",
+        "workload": "long-32mib",
+        "file_mib": 32.118937492370605,
+        "command": "select"
+      },
+      {
+        "exit_code": 0,
+        "seconds": 0.1986762,
+        "peak_rss_mib": 96.67578125,
+        "node": "v24.19.0",
+        "platform": "win32",
+        "workload": "long-32mib",
+        "file_mib": 32.118937492370605,
+        "command": "verify"
+      },
+      {
+        "exit_code": 0,
+        "seconds": 0.8437422,
+        "peak_rss_mib": 268.04296875,
+        "node": "v24.19.0",
+        "platform": "win32",
+        "workload": "long-32mib",
+        "file_mib": 32.118937492370605,
+        "command": "convert"
+      },
+      {
+        "exit_code": 0,
+        "seconds": 0.1164231,
+        "peak_rss_mib": 185.5,
+        "node": "v24.19.0",
+        "platform": "win32",
+        "workload": "long-128mib",
+        "file_mib": 128.4704999923706,
+        "command": "inspect"
+      },
+      {
+        "exit_code": 0,
+        "seconds": 0.1086105,
+        "peak_rss_mib": 185.1640625,
+        "node": "v24.19.0",
+        "platform": "win32",
+        "workload": "long-128mib",
+        "file_mib": 128.4704999923706,
+        "command": "select"
+      },
+      {
+        "exit_code": 0,
+        "seconds": 0.4872722,
+        "peak_rss_mib": 225.41015625,
+        "node": "v24.19.0",
+        "platform": "win32",
+        "workload": "long-128mib",
+        "file_mib": 128.4704999923706,
+        "command": "verify"
+      },
+      {
+        "exit_code": 0,
+        "seconds": 3.9192155,
+        "peak_rss_mib": 829.78515625,
+        "node": "v24.19.0",
+        "platform": "win32",
+        "workload": "long-128mib",
+        "file_mib": 128.4704999923706,
+        "command": "convert"
+      },
+      {
+        "exit_code": 0,
+        "seconds": 0.0230181,
+        "peak_rss_mib": 51.73828125,
+        "node": "v24.19.0",
+        "platform": "win32",
+        "workload": "numeric-200000",
+        "file_mib": 12.212443351745605,
+        "command": "inspect"
+      },
+      {
+        "exit_code": 0,
+        "seconds": 0.0282399,
+        "peak_rss_mib": 51.63671875,
+        "node": "v24.19.0",
+        "platform": "win32",
+        "workload": "numeric-200000",
+        "file_mib": 12.212443351745605,
+        "command": "select"
+      },
+      {
+        "exit_code": 0,
+        "seconds": 0.3130737,
+        "peak_rss_mib": 89.1953125,
+        "node": "v24.19.0",
+        "platform": "win32",
+        "workload": "numeric-200000",
+        "file_mib": 12.212443351745605,
+        "command": "verify"
+      },
+      {
+        "exit_code": 0,
+        "seconds": 1.0912357,
+        "peak_rss_mib": 322.71484375,
+        "node": "v24.19.0",
+        "platform": "win32",
+        "workload": "numeric-200000",
+        "file_mib": 12.212443351745605,
+        "command": "convert"
+      }
+    ]
+  }
+}

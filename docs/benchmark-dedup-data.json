@@ -1,0 +1,165 @@
+{
+  "label": "0.2.0-strl-dedup",
+  "results": [
+    {
+      "exit_code": 0,
+      "seconds": 0.0410066,
+      "peak_rss_mib": 53.9921875,
+      "node": "v24.19.0",
+      "platform": "win32",
+      "workload": "long-8mib",
+      "file_mib": 8.031046867370605,
+      "command": "inspect"
+    },
+    {
+      "exit_code": 0,
+      "seconds": 0.0572976,
+      "peak_rss_mib": 53.6171875,
+      "node": "v24.19.0",
+      "platform": "win32",
+      "workload": "long-8mib",
+      "file_mib": 8.031046867370605,
+      "command": "select"
+    },
+    {
+      "exit_code": 0,
+      "seconds": 0.0819413,
+      "peak_rss_mib": 63.5859375,
+      "node": "v24.19.0",
+      "platform": "win32",
+      "workload": "long-8mib",
+      "file_mib": 8.031046867370605,
+      "command": "verify"
+    },
+    {
+      "exit_code": 0,
+      "seconds": 0.2749118,
+      "peak_rss_mib": 118.02734375,
+      "node": "v24.19.0",
+      "platform": "win32",
+      "workload": "long-8mib",
+      "file_mib": 8.031046867370605,
+      "command": "convert"
+    },
+    {
+      "exit_code": 0,
+      "seconds": 0.0896817,
+      "peak_rss_mib": 79.76171875,
+      "node": "v24.19.0",
+      "platform": "win32",
+      "workload": "long-32mib",
+      "file_mib": 32.118937492370605,
+      "command": "inspect"
+    },
+    {
+      "exit_code": 0,
+      "seconds": 0.0830976,
+      "peak_rss_mib": 80.0546875,
+      "node": "v24.19.0",
+      "platform": "win32",
+      "workload": "long-32mib",
+      "file_mib": 32.118937492370605,
+      "command": "select"
+    },
+    {
+      "exit_code": 0,
+      "seconds": 0.2065133,
+      "peak_rss_mib": 96.08984375,
+      "node": "v24.19.0",
+      "platform": "win32",
+      "workload": "long-32mib",
+      "file_mib": 32.118937492370605,
+      "command": "verify"
+    },
+    {
+      "exit_code": 0,
+      "seconds": 1.4228113,
+      "peak_rss_mib": 269.16015625,
+      "node": "v24.19.0",
+      "platform": "win32",
+      "workload": "long-32mib",
+      "file_mib": 32.118937492370605,
+      "command": "convert"
+    },
+    {
+      "exit_code": 0,
+      "seconds": 0.2861275,
+      "peak_rss_mib": 185.76953125,
+      "node": "v24.19.0",
+      "platform": "win32",
+      "workload": "long-128mib",
+      "file_mib": 128.4704999923706,
+      "command": "inspect"
+    },
+    {
+      "exit_code": 0,
+      "seconds": 0.1576492,
+      "peak_rss_mib": 184.9609375,
+      "node": "v24.19.0",
+      "platform": "win32",
+      "workload": "long-128mib",
+      "file_mib": 128.4704999923706,
+      "command": "select"
+    },
+    {
+      "exit_code": 0,
+      "seconds": 0.6892948,
+      "peak_rss_mib": 223.80859375,
+      "node": "v24.19.0",
+      "platform": "win32",
+      "workload": "long-128mib",
+      "file_mib": 128.4704999923706,
+      "command": "verify"
+    },
+    {
+      "exit_code": 0,
+      "seconds": 7.2867995,
+      "peak_rss_mib": 856.375,
+      "node": "v24.19.0",
+      "platform": "win32",
+      "workload": "long-128mib",
+      "file_mib": 128.4704999923706,
+      "command": "convert"
+    },
+    {
+      "exit_code": 0,
+      "seconds": 0.0947723,
+      "peak_rss_mib": 51.6015625,
+      "node": "v24.19.0",
+      "platform": "win32",
+      "workload": "numeric-200000",
+      "file_mib": 12.212443351745605,
+      "command": "inspect"
+    },
+    {
+      "exit_code": 0,
+      "seconds": 0.071581,
+      "peak_rss_mib": 51.40234375,
+      "node": "v24.19.0",
+      "platform": "win32",
+      "workload": "numeric-200000",
+      "file_mib": 12.212443351745605,
+      "command": "select"
+    },
+    {
+      "exit_code": 0,
+      "seconds": 0.4721284,
+      "peak_rss_mib": 89.18359375,
+      "node": "v24.19.0",
+      "platform": "win32",
+      "workload": "numeric-200000",
+      "file_mib": 12.212443351745605,
+      "command": "verify"
+    },
+    {
+      "exit_code": 0,
+      "seconds": 0.9774534,
+      "peak_rss_mib": 323.39453125,
+      "node": "v24.19.0",
+      "platform": "win32",
+      "workload": "numeric-200000",
+      "file_mib": 12.212443351745605,
+      "command": "convert"
+    }
+  ]
+}

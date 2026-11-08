@@ -1,4 +1,10 @@
 ///|
+priv enum StrLContent {
+  Text(String)
+  Binary(Bytes)
+} derive(Eq, Hash)
+
+///|
 fn check_text(
   text : String,
   max_chars : Int,
@@ -40,9 +46,7 @@ fn validate_schema(s : Schema) -> Unit raise DtaError {
   }
   check_text(s.label, 80, 320, "dataset label")
   check_text(s.timestamp, 17, 17, "timestamp")
-  if s.timestamp != "" && s.timestamp.length() != 17 {
-    invalid(0, "timestamp must be empty or dd Mon yyyy hh:mm")
-  }
+  validate_timestamp(s.timestamp)
   let names : Map[String, Bool] = Map([])
   for col in s.columns {
     check_name(col.name, "variable name")
@@ -114,6 +118,8 @@ fn validate_schema(s : Schema) -> Unit raise DtaError {
 ///|
 /// Encode a complete dataset. Finite Number values in Float32 columns are
 /// rounded to IEEE binary32; overflows and invalid cell/storage pairs raise.
+/// Identical strL contents share their first reference within this call;
+/// text and binary contents are deduplicated separately.
 pub fn encode(dataset : Dataset) -> Bytes raise DtaError {
   let s = dataset.schema
   validate_schema(s)
@@ -205,6 +211,7 @@ pub fn encode(dataset : Dataset) -> Bytes raise DtaError {
   offsets[9] = w.bytes.length()
   w.text("<data>")
   let gso = Sink::new(s.endian)
+  let shared : Map[StrLContent, (Int, Int)] = Map([])
   for r, row in dataset.rows {
     if row.length() != k {
       invalid(w.bytes.length(), "row \{r} has wrong number of cells")
@@ -213,6 +220,7 @@ pub fn encode(dataset : Dataset) -> Bytes raise DtaError {
       write_cell(
         w,
         gso,
+        shared,
         s.columns[col].storage,
         value,
         s.version,
@@ -224,7 +232,7 @@ pub fn encode(dataset : Dataset) -> Bytes raise DtaError {
   w.text("</data>")
   offsets[10] = w.bytes.length()
   w.text("<strls>")
-  w.raw(gso.finish()[:])
+  w.append(gso)
   w.text("</strls>")
   offsets[11] = w.bytes.length()
   w.text("<value_labels>")
@@ -256,7 +264,7 @@ pub fn encode(dataset : Dataset) -> Bytes raise DtaError {
     for entry in entries {
       w.uint(entry.value.to_uint64(), 4)
     }
-    w.raw(txt.finish()[:])
+    w.append(txt)
     w.text("</lbl>")
   }
   w.text("</value_labels>")
@@ -267,16 +275,22 @@ pub fn encode(dataset : Dataset) -> Bytes raise DtaError {
   for pos in offsets {
     map_bytes.uint(pos.to_uint64(), 8)
   }
-  for i, b in map_bytes.bytes {
-    w.bytes[map_start + i] = b
-  }
-  w.finish()
+  let body = w.bytes.view()
+  let mapping = map_bytes.bytes.view()
+  Bytes::makei(body.length(), i => {
+    if i >= map_start && i < map_start + mapping.length() {
+      mapping[i - map_start]
+    } else {
+      body[i]
+    }
+  })
 }
 
 ///|
 fn write_cell(
   w : Sink,
   gso : Sink,
+  shared : Map[StrLContent, (Int, Int)],
   storage : Storage,
   value : Value,
   version : Int,
@@ -301,6 +315,18 @@ fn write_cell(
     (StrL, Text("")) => w.uint(0, 8)
     (StrL, Text(_) | Binary(_)) => {
       let vlen = if version == 118 { 2 } else { 3 }
+      let content : StrLContent = match value {
+        Text(t) => Text(t)
+        Binary(b) => Binary(b)
+        _ => abort("unreachable")
+      }
+      // Reuse the first row/column reference across all strL columns. Keep
+      // text and binary separate even when their encoded bytes are identical.
+      if shared.get(content) is Some((v, o)) {
+        w.uint(v.to_uint64(), vlen)
+        w.uint(o.to_uint64(), 8 - vlen)
+        return
+      }
       w.uint(col.to_uint64(), vlen)
       w.uint(row.to_uint64(), 8 - vlen)
       let (kind, payload) = match value {
@@ -319,6 +345,7 @@ fn write_cell(
       gso.uint(kind.to_uint64(), 1)
       gso.uint(payload.length().to_uint64(), 4)
       gso.raw(payload[:])
+      shared[content] = (col, row)
     }
     (Byte | Int16 | Int32, Integer(n)) => {
       let (min, max) = match storage {

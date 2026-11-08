@@ -17,6 +17,9 @@ test "public library example" {
   let bytes = @dta.encode(dataset)
   let reader = @dta.open(bytes)
   assert_eq(reader.row_count(), 2)
+  reader.verify(batch_size=1)
+  assert_true(reader.preview().contains("中文😀"))
+  assert_true(reader.describe().contains("访谈记录"))
   assert_eq(reader.read_rows(offset=1, limit=1, columns=[0]), [
     [@dta.Missing(1)],
   ])
