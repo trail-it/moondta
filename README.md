@@ -3,7 +3,7 @@
 用 MoonBit 读取、检查和生成 **Stata DTA 118/119** 文件，面向问卷、社会科学及统计数据交换。
 核心解析与编码不依赖 Python、Stata 或 ReadStat；Node.js 仅为命令行提供文件读写。
 
-当前为本地开发版本 `0.2.0`，模块名暂为 `local/moondta`，尚未发布到 Mooncakes。
+模块名为 `trail-it/moondta`，当前版本为 `0.2.0`。
 
 ## 已实现
 
@@ -60,12 +60,16 @@ node _build/js/debug/build/cmd/main/main.js export _build/survey119.dta _build/r
 
 ## 库 API
 
-包配置导入模块并设置别名：
+在自己的 MoonBit 工程里添加依赖，再在包配置中设置别名。
+
+```sh
+moon add trail-it/moondta@0.2.0
+```
 
 ```moonbit
 // moon.pkg
 import {
-  "local/moondta" @dta,
+  "trail-it/moondta" @dta,
 }
 ```
 

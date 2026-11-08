@@ -1,8 +1,10 @@
-name = "local/moondta"
+name = "trail-it/moondta"
 
 version = "0.2.0"
 
 readme = "README.md"
+
+repository = "https://github.com/trail-it/moondta"
 
 license = "MIT"
 

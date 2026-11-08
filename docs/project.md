@@ -1,6 +1,6 @@
-# MoonDTA：范围与本地交付记录
+# MoonDTA 项目与验证记录
 
-日期：2026-11-08。当前版本：0.2.0。按用户要求仅完成本地版本，暂不发布。
+日期为 2026-11-08，当前版本为 0.2.0。
 
 ## 0.2.0 本地完善
 
@@ -29,7 +29,7 @@
 
 ### Linux 主机验证（2026-11-08）
 
-通过用户指定的 `ssh desktop` 在真实 Ubuntu 26.04.1 LTS / Linux 7.0.0-42-generic x86_64 上运行，
+在 Ubuntu 26.04.1 LTS / Linux 7.0.0-42-generic x86_64 主机上运行，
 使用独立临时目录和 Python 虚拟环境，没有修改主机原有项目或全局工具链。
 
 - MoonBit 与本地项目锁定版本一致：moon 0.1.20260915，moonc v0.10.13+cbb11c36f，core 同版本；
@@ -101,9 +101,9 @@ Wasm GC 测试验证核心算法，文件 I/O 只在 Node CLI 中实现。未在
 
 - 采用 MIT；保留 ReadStat v1.1.9 的 MIT 许可。参考实现重写与宿主 I/O 的边界已说明。
 - 自有示例是合成数据。官方数据、本地虚拟环境、构建缓存不进入 Git 或 Mooncakes 归档。
-- 模块使用本地占位 namespace `local/moondta`。正式 namespace、GitHub owner 和仓库地址待项目发布阶段确定。
+- 正式模块为 `trail-it/moondta`，源码仓库为 [trail-it/moondta](https://github.com/trail-it/moondta)。
 - `tests/package_consumer.py` 已检查实际 zip 内容，并从解包后的库建立独立 JS/Wasm GC 消费工程，公开 API 测试通过。
-- 尚未执行：公开仓库发布、远端 CI、Mooncakes 发布与 registry 安装验证、赛事报名及官方审核。
+- 赛事报名及官方审核待进行。
 
 ## 申报简介草稿
 
@@ -111,6 +111,6 @@ MoonDTA 是面向统计数据交换的 MoonBit Stata DTA 118/119 读写库。项
 在 MoonBit 中重写二进制解析、类型及缺失值编码、元数据和长字符串处理；提供按需选列/批次读取、
 带元数据的 JSON 交换和命令行工具。验证结合 pandas、ReadStat 和 Stata 官方样本，
 覆盖 Unicode、全部扩展缺失值、大小端以及 65,537 列宽表。项目当前完成本地实现与验证，
-发布身份、公开仓库及当期正式报名信息尚未填写。使用 AI 辅助开发，来源和验证边界公开记录。
+当期正式报名信息待填写。使用 AI 辅助开发，来源和验证边界公开记录。
 
 本文件不构成十一月赛事规则核验或官方通过证明；后续申报按当期规则另行核对。

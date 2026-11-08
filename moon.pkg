@@ -5,5 +5,5 @@ import {
 }
 
 import {
-  "local/moondta" @dta,
+  "trail-it/moondta" @dta,
 } for "test"

@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "local/moondta"
+package "trail-it/moondta"
 
 import {
   "moonbitlang/core/debug",
