@@ -395,9 +395,7 @@ fn write_inline_cell(
         )
       }
       w.raw(b[:])
-      for _ in b.length()..<n {
-        w.uint(0, 1)
-      }
+      w.pad_field(n - b.length())
     }
     (Byte | Int16 | Int32, Integer(n)) => {
       let (min, max) = match storage {

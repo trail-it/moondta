@@ -77,9 +77,9 @@ test "streamed output matches the public encoder including strL and endianness" 
   let dataset : @dta.Dataset = {
     schema,
     rows: [
-      [@dta.Text("中文"), @dta.Binary(b"abc\\x00")],
+      [@dta.Text("中文"), @dta.Binary(b"abc\x00")],
       [@dta.Text("abc"), @dta.Text("中文")],
-      [@dta.Binary(b"abc\\x00"), @dta.Binary(b"")],
+      [@dta.Binary(b"abc\x00"), @dta.Binary(b"")],
       [@dta.Binary(b""), @dta.Text("")],
     ],
   }

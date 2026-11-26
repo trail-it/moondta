@@ -122,15 +122,23 @@ fn Sink::uint(self : Sink, value : UInt64, n : Int) -> Unit {
 }
 
 ///|
+// Stata fixed fields are at most str2045. Copying their zero tail as bytes
+// also keeps sparse survey columns cheap when streamed files span gigabytes.
+let field_zeros : Bytes = Bytes::make(2045, 0)
+
+///|
+fn Sink::pad_field(self : Sink, count : Int) -> Unit {
+  self.raw(field_zeros[:count])
+}
+
+///|
 fn Sink::fixed(self : Sink, s : String, n : Int) -> Unit raise DtaError {
   let b = @utf8.encode(s)
   if b.length() >= n {
     invalid(0, "text exceeds fixed field width \{n - 1}")
   }
   self.raw(b[:])
-  for _ in b.length()..<n {
-    self.bytes.write_byte(0)
-  }
+  self.pad_field(n - b.length())
 }
 
 ///|
