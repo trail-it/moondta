@@ -81,6 +81,7 @@ test "reserved numeric codes and noncanonical missing patterns fail on row decod
     }
     let r = open(put_uint(b, at, bad, storage.width()))
     rejects(() => ignore(r.read()))
+    rejects(() => r.verify())
   }
   let s = Schema::new([Column::new("x", Float64)])
   rejects(() => {
@@ -159,4 +160,24 @@ test "deterministic byte mutations produce data or checked errors, never traps" 
       _ => ()
     }
   }
+}
+
+///|
+test "verification checks unreferenced text and last-batch references" {
+  let data : Dataset = {
+    schema: Schema::new([Column::new("s", StrL)]),
+    rows: [[Text("shared")], [Text("shared")], [Binary(b"\\xff")]],
+  }
+  let bytes = encode(data)
+  let at = find_tag(bytes, "<data>") + 6
+  let reader = open(bytes)
+  reader.verify(batch_size=1)
+  reader.verify(batch_size=2)
+  let dangling = put_uint(bytes, at + 16, 91UL, 2)
+  rejects(() => open(dangling).verify(batch_size=2))
+  let orphan = put_uint(put_uint(bytes, at, 0UL, 8), at + 8, 0UL, 8)
+  let corrupted = put_uint(orphan, find_tag(orphan, "shared"), 255UL, 1)
+  let r = open(corrupted)
+  assert_eq(r.read_rows(), [[Text("")], [Text("")], [Binary(b"\\xff")]])
+  rejects(() => r.verify())
 }

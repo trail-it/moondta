@@ -312,8 +312,19 @@ fn Reader::read_strl(
 }
 
 ///|
+fn Reader::read_strl_key(
+  self : Reader,
+  c : Cursor,
+) -> (UInt64, UInt64) raise DtaError {
+  let vlen = if self.metadata.version == 118 { 2 } else { 3 }
+  let variable = c.uint(vlen)
+  let observation = c.uint(8 - vlen)
+  (variable, observation)
+}
+
+///|
 /// Scan every strL object (including unreferenced objects) and every cell.
-/// Decoded values are discarded per batch; original file bytes remain in memory.
+/// Validate each text payload once, then scan cells and strL references in file order.
 pub fn Reader::verify(
   self : Reader,
   batch_size? : Int = 256,
@@ -322,13 +333,34 @@ pub fn Reader::verify(
     invalid(0, "batch size must be positive")
   }
   for object in self.strls.values() {
-    ignore(self.read_strl(object))
+    // Binary data has no encoding constraints; open already checked its bounds.
+    if object.kind != 129 {
+      ignore(self.read_strl(object))
+    }
   }
   let mut offset = 0
+  let cache = Map([])
   while offset < self.count {
     let remaining = self.count - offset
     let limit = if batch_size < remaining { batch_size } else { remaining }
-    ignore(self.read_rows(offset~, limit~))
+    let c = Cursor::new(
+      self.bytes,
+      self.metadata.endian,
+      start=self.data_start + offset * self.row_width,
+    )
+    for _ in 0..<limit {
+      for col in self.metadata.columns {
+        if col.storage == StrL {
+          let p = c.pos
+          let key = self.read_strl_key(c)
+          if key != (0UL, 0UL) && !self.strls.contains(key) {
+            invalid(p, "unresolved strL reference")
+          }
+        } else {
+          ignore(self.read_cell(c, col.storage, cache))
+        }
+      }
+    }
     offset += limit
   }
 }
@@ -491,19 +523,17 @@ fn Reader::read_cell(
   match storage {
     Str(n) => Text(c.cstring(n, terminated=false))
     StrL => {
-      let vlen = if self.metadata.version == 118 { 2 } else { 3 }
-      let v = c.uint(vlen)
-      let o = c.uint(8 - vlen)
-      if v == 0 && o == 0 {
+      let key = self.read_strl_key(c)
+      if key == (0UL, 0UL) {
         Text("")
       } else {
-        if cache.get((v, o)) is Some(value) {
+        if cache.get(key) is Some(value) {
           return value
         }
-        match self.strls.get((v, o)) {
+        match self.strls.get(key) {
           Some(object) => {
             let value = self.read_strl(object)
-            cache[(v, o)] = value
+            cache[key] = value
             value
           }
           None => raise Invalid(offset=p, message="unresolved strL reference")
