@@ -170,3 +170,15 @@ test "reader metadata copies do not invalidate row decoding" {
   assert_eq(reader.read_rows(limit=1)[0].length(), 8)
   assert_eq(reader.schema().value_labels[0].entries.length(), 2)
 }
+
+///|
+test "exchange rejects fractional integer cells, missing tags and binary octets" {
+  let wire = sample(118, Little).to_exchange()
+  guard wire is Object(fields) else { abort("expected object") }
+  for
+    cell in (
+      [{ "int": 1.5 }, { "missing": 0.5 }, { "binary": [127.25] }] : Array[Json]) {
+    fields["rows"] = [[cell]]
+    rejects(() => ignore(from_exchange(wire)))
+  }
+}

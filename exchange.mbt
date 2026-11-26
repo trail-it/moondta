@@ -138,6 +138,17 @@ fn bytes_from_ints(a : Array[Int]) -> Bytes raise DtaError {
 }
 
 ///|
+fn exact_int(json : Json) -> Int raise DtaError {
+  guard json is Number(n, ..) &&
+    n >= -2147483648.0 &&
+    n <= 2147483647.0 &&
+    n.to_int().to_double() == n else {
+    raise Invalid(offset=0, message="expected an exact 32-bit integer")
+  }
+  n.to_int()
+}
+
+///|
 fn parse_bits(s : String) -> UInt64 raise DtaError {
   if s.length() < 1 || s.length() > 16 {
     invalid(0, "number_bits needs 1..16 hexadecimal digits")
@@ -189,25 +200,21 @@ pub fn from_exchange(json : Json) -> Dataset raise DtaError {
           message="exchange cell must have exactly one type key",
         )
       }
-      try {
-        match j {
-          { "int": v, .. } => Integer(@json.from_json(v))
-          { "number_bits": String(s), .. } =>
-            Number(parse_bits(s).reinterpret_as_double())
-          { "text": String(s), .. } => Text(s)
-          { "binary": b, .. } => Binary(bytes_from_ints(@json.from_json(b)))
-          { "missing": m, .. } => {
-            let tag : Int = @json.from_json(m)
-            if tag < 0 || tag > 26 {
-              invalid(0, "missing tag must be 0..26")
-            }
-            Missing(tag)
+      match j {
+        { "int": v, .. } => Integer(exact_int(v))
+        { "number_bits": String(s), .. } =>
+          Number(parse_bits(s).reinterpret_as_double())
+        { "text": String(s), .. } => Text(s)
+        { "binary": Array(bytes), .. } =>
+          Binary(bytes_from_ints(bytes.map(exact_int)))
+        { "missing": m, .. } => {
+          let tag = exact_int(m)
+          if tag < 0 || tag > 26 {
+            invalid(0, "missing tag must be 0..26")
           }
-          _ => raise Invalid(offset=0, message="invalid exchange cell")
+          Missing(tag)
         }
-      } catch {
-        Invalid(offset~, message~) => raise Invalid(offset~, message~)
-        e => raise Invalid(offset=0, message="invalid exchange cell: \{e}")
+        _ => raise Invalid(offset=0, message="invalid exchange cell")
       }
     })
   })
