@@ -10,7 +10,7 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def write_survey(path, count):
+def write_survey(path, count, unique):
     schema = json.loads((ROOT / 'examples/survey.json').read_text(encoding='utf-8'))['schema']
     schema['columns'] = [schema['columns'][0], schema['columns'][-1]]
     schema['value_labels'] = []
@@ -24,6 +24,8 @@ def write_survey(path, count):
         stream.write(json.dumps(dict(moondta_jsonl=1, rows=count, schema=schema), ensure_ascii=False) + '\n')
         for i in range(count):
             memo = f'站点 {i % 512}\n' + ''.join(observations[(i + j) % 4] for j in range(8))
+            if unique:
+                memo = f'{i + 1}: {memo}'
             row = [{'int': i + 1}, {'text': memo}]
             stream.write(json.dumps(row, ensure_ascii=False, separators=(',', ':')) + '\n')
 
@@ -34,6 +36,7 @@ def main():
     parser.add_argument('candidate', type=Path)
     parser.add_argument('--rows', type=int, default=100000)
     parser.add_argument('--repeats', type=int, default=3)
+    parser.add_argument('--unique', action='store_true', help='generate a different long string in every row')
     args = parser.parse_args()
     if args.rows < 1 or args.repeats < 1:
         parser.error('rows and repeats must be positive')
@@ -41,7 +44,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix='moondta-import-bench-') as tmp:
         root = Path(tmp)
         source = root / 'survey.jsonl'
-        write_survey(source, args.rows)
+        write_survey(source, args.rows, args.unique)
         for run in range(args.repeats):
             order = ('baseline', 'candidate') if run % 2 == 0 else ('candidate', 'baseline')
             for name in order:
@@ -53,7 +56,7 @@ def main():
             assert filecmp.cmp(left, right, shallow=False), 'DTA outputs differ'
             left.unlink()
             right.unlink()
-        print(json.dumps({'rows': args.rows, 'input_bytes': source.stat().st_size, 'runs': results,
+        print(json.dumps({'rows': args.rows, 'unique': args.unique, 'input_bytes': source.stat().st_size, 'runs': results,
                           'median_peak_rss_mib': {k: statistics.median(x['peak_rss_mib'] for x in runs)
                                                   for k, runs in results.items()}}, indent=2))
 

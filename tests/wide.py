@@ -3,7 +3,7 @@ from pathlib import Path
 import tempfile
 import json
 import pandas as pd
-from interop import cli
+from interop import cli, check_streamed_equivalent
 
 
 with tempfile.TemporaryDirectory(prefix="moondta-wide-") as work:
@@ -23,6 +23,7 @@ with tempfile.TemporaryDirectory(prefix="moondta-wide-") as work:
         assert wire["rows"] == [[{"text": "宽表长文本"}, {"int": 0}]]
         written = root / f"moon-{name}.dta"
         cli("convert", source, written)
+        check_streamed_equivalent(written)
         check = pd.read_stata(written, columns=["v65536", "v0"], convert_categoricals=False)
         assert check["v65536"].iloc[0] == "宽表长文本"
         assert check["v0"].iloc[0] == 0

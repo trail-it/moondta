@@ -6,6 +6,7 @@ examples for local verification; those third-party data files are not distribute
 from __future__ import annotations
 
 import argparse
+import filecmp
 import json
 import math
 from pathlib import Path
@@ -35,6 +36,14 @@ def export(path, directory, name):
     result = directory / f"{name}.json"
     cli("export", path, result)
     return json.loads(result.read_text(encoding="utf-8"))
+
+
+def check_streamed_equivalent(reference):
+    lines = reference.with_suffix('.jsonl')
+    restored = reference.with_suffix('.stream.dta')
+    cli('export-jsonl', reference, lines)
+    cli('import-jsonl', lines, restored)
+    assert filecmp.cmp(restored, reference, shallow=False)
 
 
 def scalar(cell):
@@ -100,6 +109,7 @@ def synthetic(directory):
             assert meta.file_label == "中文数据集"
             assert meta.variable_value_labels["字节"][100] == "百"
             assert meta.original_variable_types["date"] == "%td"
+            check_streamed_equivalent(dest)
             again = export(dest, directory, stem + "-moon")
             assert wire == again
             assert "Verified 3 rows" in cli("verify", dest, "--batch-size", 2)
@@ -129,6 +139,7 @@ def synthetic(directory):
             dest = exchange.with_suffix(".dta")
             cli("import", exchange, dest, "--version", version, "--endian", order)
             compare_pandas(dest, wire)
+            check_streamed_equivalent(dest)
             rs, meta = pyreadstat.read_dta(dest, user_missing=True)
             for name in rs.columns:
                 assert math.isnan(rs[name].iloc[0])
