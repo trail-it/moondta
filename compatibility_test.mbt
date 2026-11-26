@@ -107,3 +107,28 @@ test "shared text and binary strL references survive selection across batches" {
     ])
   }
 }
+
+///|
+test "batch visitor preserves absolute offsets and projection during callbacks" {
+  let reader = open(encode(sample(119, Big)))
+  let columns = [1, 0]
+  let expected = reader.read_rows(columns~, offset=1, limit=5)
+  let result : Array[Array[Value]] = []
+  let starts : Array[Int] = []
+  reader.each_batch(
+    (pos, rows) => {
+      starts.push(pos)
+      columns[0] = 7
+      for row in rows {
+        result.push(row)
+      }
+    },
+    offset=1,
+    limit=5,
+    batch_size=2,
+    columns~,
+  )
+  assert_eq(starts, [1, 3, 5])
+  assert_eq(result, expected)
+  reader.each_batch((_, _) => abort("empty range"), offset=reader.row_count())
+}

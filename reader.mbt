@@ -357,13 +357,56 @@ pub fn Reader::read_rows(
   limit? : Int = self.count - offset,
   columns? : Array[Int],
 ) -> Array[Array[Value]] raise DtaError {
+  self.check_range(offset, limit)
+  self.decode_rows(offset, limit, self.indices(columns))
+}
+
+///|
+fn Reader::check_range(
+  self : Reader,
+  offset : Int,
+  limit : Int,
+) -> Unit raise DtaError {
   if offset < 0 ||
     offset > self.count ||
     limit < 0 ||
     limit > self.count - offset {
     invalid(0, "row range outside dataset")
   }
-  let indices = self.indices(columns)
+}
+
+///|
+/// Visit decoded row batches, starting at their absolute zero-based offset.
+/// Column indices are snapshotted before the first callback. An empty range emits no batches.
+pub fn Reader::each_batch(
+  self : Reader,
+  visit : (Int, Array[Array[Value]]) -> Unit raise,
+  offset? : Int = 0,
+  limit? : Int = self.count - offset,
+  columns? : Array[Int],
+  batch_size? : Int = 256,
+) -> Unit raise {
+  self.check_range(offset, limit)
+  if batch_size <= 0 {
+    invalid(0, "batch size must be positive")
+  }
+  let indices = self.indices(columns).copy()
+  let mut pos = offset
+  let end = offset + limit
+  while pos < end {
+    let size = if end - pos < batch_size { end - pos } else { batch_size }
+    visit(pos, self.decode_rows(pos, size, indices))
+    pos += size
+  }
+}
+
+///|
+fn Reader::decode_rows(
+  self : Reader,
+  offset : Int,
+  limit : Int,
+  indices : Array[Int],
+) -> Array[Array[Value]] raise DtaError {
   // Reuse shared objects only for this batch; Reader never retains decoded text.
   let cache : Map[(UInt64, UInt64), Value] = Map([])
   Array::makei(limit, r => {
