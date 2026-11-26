@@ -3,7 +3,7 @@
 用 MoonBit 读取、检查和生成 **Stata DTA 118/119** 文件，面向问卷、社会科学及统计数据交换。
 核心解析与编码不依赖 Python、Stata 或 ReadStat；Node.js 仅为命令行提供文件读写。
 
-Mooncakes 模块名为 `trail-it/moondta`，本页对应版本 `0.3.1`。
+Mooncakes 模块名为 `trail-it/moondta`，本页对应版本 `0.4.0`。
 
 ## 已实现
 
@@ -69,7 +69,7 @@ node _build/js/debug/build/cmd/main/main.js export-jsonl _build/survey.dta _buil
 node _build/js/debug/build/cmd/main/main.js import-jsonl _build/survey.jsonl _build/from-lines.dta --version 119 --endian big
 ```
 
-支持 `--columns`、`--offset`、`--limit`，行范围遵循 `export` 的边界检查。
+`export-jsonl` 支持 `--columns`、`--offset`、`--limit`，行范围遵循 `export` 的边界检查。
 第一行包含 `moondta_jsonl: 1`、选中行数 `rows` 和完整投影后 `schema`。
 其后每行是一个使用现有类型标记的单元格数组，字符串中的换行按 JSON 转义。
 空结果只包含头行。格式使用 UTF-8，每行以 LF 结尾。
@@ -93,14 +93,18 @@ with open("_build/survey.jsonl", encoding="utf-8") as stream:
 
 `import-jsonl` 接受 LF、CRLF 及没有末尾换行的 UTF-8 文件。文件头声明行数，每条记录的单元格数必须与列数一致。遇到截断、额外记录、无效 UTF-8 或错误的单元格标记，会报告行号。默认保留源版本及字节序，写入时可用 `--version` 和 `--endian` 指定目标格式。
 
-库调用者可用 `@dta.from_jsonl(next_line)` 从回调逐行提供文本，以 `None` 表示输入结束。CLI 按 64 KiB 分块读取文件，跨块记录在解析前拼合，输入上限为 512 MiB。返回的 Dataset 仍保留全部数据行，生成 DTA 时还会分配编码缓冲区。单文档 JSON 对应 `export` 和 `import`。
+从 0.4.0 起，`import-jsonl` 按 64 KiB 读入文件，逐行编码并分块写入 DTA。峰值内存受表结构、最长一行、读写缓冲区和固定容量的 strL 索引缓存影响。CLI 每条 JSONL 记录上限为 512 MiB，文件可以更大。
+
+命令在目标目录暂存正在写入的 DTA 和唯一 strL 对象。相同类型及内容复用第一次出现的引用，文本和二进制分开比较。核对行数后，命令写入对象区、取值标签和段偏移表，再独占安装目标文件。磁盘需容纳 DTA 和临时对象。支持硬链接的文件系统可以直接安装，其他受支持的文件系统使用独占复制。普通读写或校验错误会清理临时文件，已有目标受保护。
+
+库接口 `@dta.write_jsonl(next_line, write_at, scratch~, version?, endian?)` 可接入自己的存储。`next_line()` 在输入结束时返回 `None`。`write_at` 接受零起始的 64 位位置和完整字节块，最后一次写入回填 112 字节的偏移表。`ScratchFile` 提供按位置读写的回调，必须读满指定长度并写完整块，失败时抛错。调用者提供初始为空的输出、独立的临时存储，并负责资源清理。需要可编辑的内存数据集时可使用 `@dta.from_jsonl(next_line)`。单文档 JSON 对应 `export` 和 `import`。
 
 ### 安装已发布库
 
 在自己的 MoonBit 工程里添加依赖，再在包配置中设置别名。
 
 ```sh
-moon add trail-it/moondta@0.3.1
+moon add trail-it/moondta@0.4.0
 ```
 
 ```moonbit
@@ -186,6 +190,8 @@ moon build --target js
 python -m pip install -r tests/requirements.txt
 python tests/interop.py
 python tests/compat_interop.py
+python tests/jsonl_interop.py
+python tests/streaming_import.py
 python tests/wide.py
 python tests/package_consumer.py
 # 可选：下载 Stata Press 示例（保存在被忽略的 tests/generated/）
@@ -209,12 +215,8 @@ python tests/benchmark.py --sizes 8 32 128 --output _build/benchmark.json
 ## 边界
 
 - 仅支持 118/119；114/117、SAS/SPSS、统计运算、Stata 命令解释器不在范围内。
-- 内存实现：文件字节和 strL 索引驻留内存，分批读取减少已解码行的内存，**不是磁盘流式读取**。
-  Reader 不长期缓存已解码 strL。Writer 使用连续字节缓冲区，并在单次写入中跨行、跨列复用相同 strL 内容；
-  文本与二进制分别去重，唯一内容索引随本次写入结束释放。完整转换和单文档 JSON 交换仍在内存中完成。
-  多行数值数据的对象开销也可能显著高于文件大小，容量依据见性能记录。
-- CLI 单个输入上限 512 MiB；核心偏移/行数使用有符号 32 位索引，不能处理 ≥2 GiB 的文件。
-  118 限 32,767 列，119 限 120,000 列。未进行上限文件大小的容量测试。
+- `open` 在内存中持有 DTA 字节和 strL 位置索引，分批读取减少已解码行的内存。`encode(Dataset)`、完整转换和单文档 JSON 交换在内存中完成。
+- `import-jsonl` 使用 64 位输出偏移，JSONL 头中声明的行数上限为 2,147,483,647。其他 CLI 命令仍限制单个输入文件为 512 MiB，内存版 Reader 使用有符号 32 位索引。118 限 32,767 列，119 限 120,000 列。
 - 保留语义，不承诺文件字节完全相同：写出会重建 map、strL 引用和标签布局；未引用的 strL 对象、
   字段填充字节、EOF 后的换行不作为数据保存。可接受 EOF 后单个 LF 或 CRLF，其余尾随内容报错。
 - 保留自定义显示格式和 characteristics，但不执行格式、不解释应用私有属性。

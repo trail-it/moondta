@@ -118,3 +118,25 @@ python tests/benchmark.py --sizes 8 32 128 --output _build/benchmark.json
 ```sh
 python tests/benchmark_jsonl_import.py /path/to/0.3.0/main.js /path/to/0.3.1/main.js --rows 100000 --repeats 3
 ```
+
+## 0.4.0 逐行写入 DTA
+
+2026-11-26，Linux 7.0.0-44-generic x86_64，Node v22.22.1。输入、临时对象和输出均放在磁盘文件系统。表中每版各启动三个独立 Node 进程并交替运行，报告中位数。各轮均对比两个版本的完整 DTA 字节。
+
+| 合成问卷 | 0.3.1 峰值 RSS（MiB） | 0.4.0 峰值 RSS（MiB） | 0.3.1 耗时（秒） | 0.4.0 耗时（秒） |
+|---|---:|---:|---:|---:|
+| 10 万行，共享 strL | 187.9 | 88.7 | 0.594 | 0.919 |
+| 30 万行，共享 strL | 388.5 | 89.3 | 1.583 | 2.535 |
+| 10 万行，每条 strL 均不同 | 365.5 | 131.8 | 1.646 | 2.355 |
+
+30 万行的峰值内存下降 77.0%，耗时增加约 0.95 秒。逐行编码和磁盘暂存减少了常驻数据，也会增加读写开销。RSS 包含整个 Node 进程，受垃圾回收与运行环境影响。
+
+容量实测使用 110 万行、宽度 2045 字节的定长列和 110 万个唯一中文 strL。JSONL 为 673,178,311 字节（642.0 MiB），DTA 为 2,911,691,399 字节（2.71 GiB）。在 V8 老生代上限 64 MiB 下，单次导入耗时 55.75 秒，进程峰值 RSS 为 139.4 MiB。计时只含导入。独立 Python 程序按 DTA 119 大端格式顺序核对全部 110 万行的 ID、定长补零、strL 引用与对象内容，并检查段边界和文件长度。
+
+分别构建两版 CLI 后可复测下列场景。容量测试会使用数 GiB 临时磁盘空间，可用 `TMPDIR` 选择 Linux 上的测试盘。
+
+```sh
+python tests/benchmark_jsonl_import.py /path/to/0.3.1/main.js /path/to/0.4.0/main.js --rows 300000 --repeats 3
+python tests/benchmark_jsonl_import.py /path/to/0.3.1/main.js /path/to/0.4.0/main.js --rows 100000 --repeats 3 --unique
+python tests/large_jsonl.py --rows 1100000 --heap-mib 64
+```
