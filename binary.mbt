@@ -3,7 +3,7 @@ priv struct Cursor {
   bytes : Bytes
   mut pos : Int
   end : Int
-  mut endian : Endian
+  endian : Endian
 }
 
 ///|
@@ -27,20 +27,16 @@ fn Cursor::take(self : Cursor, n : Int) -> BytesView raise DtaError {
 }
 
 ///|
-fn Cursor::tag(self : Cursor, s : String) -> Unit raise DtaError {
-  let expected = @utf8.encode(s)
-  let start = self.pos
-  if self.take(expected.length()) != expected[:] {
-    invalid(start, "expected \{s}")
-  }
+fn Cursor::uint(self : Cursor, n : Int) -> UInt64 raise DtaError {
+  decode_uint(self.take(n), self.endian)
 }
 
 ///|
-fn Cursor::uint(self : Cursor, n : Int) -> UInt64 raise DtaError {
-  let b = self.take(n)
+fn decode_uint(b : BytesView, endian : Endian) -> UInt64 {
+  let n = b.length()
   let mut value : UInt64 = 0
   for i in 0..<n {
-    let shift = if self.endian == Little { i * 8 } else { (n - i - 1) * 8 }
+    let shift = if endian == Little { i * 8 } else { (n - i - 1) * 8 }
     value = value | (b[i].to_uint64() << shift)
   }
   value
@@ -61,12 +57,6 @@ fn decode_utf8(b : BytesView, pos : Int) -> String raise DtaError {
   @utf8.decode(b, ignore_bom=true) catch {
     _ => raise Invalid(offset=pos, message="invalid UTF-8")
   }
-}
-
-///|
-fn Cursor::text(self : Cursor, n : Int) -> String raise DtaError {
-  let p = self.pos
-  decode_utf8(self.take(n), p)
 }
 
 ///|

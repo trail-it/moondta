@@ -22,6 +22,10 @@ pub(all) suberror DtaError {
   Invalid(offset~ : Int, message~ : String)
 } derive(@debug.Debug)
 
+pub(all) suberror DtaFileError {
+  InvalidFile(offset~ : Int64, message~ : String)
+} derive(@debug.Debug)
+
 // Types and methods
 pub(all) struct Characteristic {
   variable : String
