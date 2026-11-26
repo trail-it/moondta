@@ -1,6 +1,7 @@
 import {
   "trail-it/moondta" @dta,
   "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/buffer",
   "moonbitlang/core/json",
 }
 

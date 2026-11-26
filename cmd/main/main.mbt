@@ -25,7 +25,7 @@ extern "js" fn write_line(fd : Int, line : String) -> String? =
   #| (fd, line) => { try { require('node:fs').writeFileSync(fd, line, 'utf8'); return undefined; } catch (e) { return e.message; } }
 
 ///|
-extern "js" fn close_output(fd : Int) -> String? =
+extern "js" fn close_file(fd : Int) -> String? =
   #| (fd) => { try { require('node:fs').closeSync(fd); return undefined; } catch (e) { return e.message; } }
 
 ///|
@@ -38,28 +38,6 @@ fn load(path : String) -> Bytes raise {
     fail("cannot read regular file (CLI input limit: 512 MiB): \{path}")
   }
   bytes
-}
-
-///|
-fn load_jsonl(path : String) -> @dta.Dataset raise {
-  let bytes = load(path)
-  let mut start = 0
-  let mut line_number = 0
-  @dta.from_jsonl(() => {
-    if start == bytes.length() {
-      return None
-    }
-    let mut end = start
-    while end < bytes.length() && bytes[end] != 10 {
-      end += 1
-    }
-    line_number += 1
-    let line = @utf8.decode(bytes[start:end]) catch {
-      _ => fail("JSONL line \{line_number}: invalid UTF-8")
-    }
-    start = if end < bytes.length() { end + 1 } else { end }
-    Some(line)
-  })
 }
 
 ///|
@@ -236,7 +214,7 @@ fn run() -> Unit raise {
       columns~,
       batch_size=batch,
     )
-    if close_output(fd) is Some(message) {
+    if close_file(fd) is Some(message) {
       fail("cannot close output: \{message}")
     }
     return

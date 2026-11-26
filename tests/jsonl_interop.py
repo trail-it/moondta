@@ -108,6 +108,53 @@ with tempfile.TemporaryDirectory(prefix='moondta-jsonl-') as directory:
                                 capture_output=True, text=True, encoding='utf-8')
         assert result.returncode != 0 and f'JSONL line {line_number}:' in result.stderr, result
         assert not target.exists()
+    # Place a four-byte character, a line ending, or EOF on a read boundary.
+    chunk = 64 * 1024
+    header = dict(json.loads(records[0]), rows=1)
+    prefix = json.dumps(header, ensure_ascii=False).encode('utf-8') + b'\n'
+    row = [*typed['rows'][0][:-1], {'text': 'MARK'}]
+    before, after = json.dumps(row, ensure_ascii=False).encode('utf-8').split(b'MARK')
+    for label, split, ending in [('character', 1, b'\n'), ('crlf', 0, b'\r\n'), ('eof', 0, b'')]:
+        if label == 'character':
+            padding = chunk - len(prefix) - len(before) - split
+        else:
+            padding = chunk * 3 - len(prefix) - len(before) - len(after) - 4 - (1 if label == 'crlf' else 0)
+        value = 'x' * padding + '😀'
+        source = root / f'boundary-{label}.jsonl'
+        source.write_bytes(prefix + before + value.encode('utf-8') + after + ending)
+        dest = root / f'boundary-{label}.dta'
+        cli('import-jsonl', source, dest)
+        expected = [*row[:-1], {'text': value}]
+        assert export(dest, root, f'boundary-{label}')['rows'] == [expected]
+    # Inject a second-read failure. The input must close and the destination must stay absent.
+    preload = root / 'read-failure.cjs'
+    preload.write_text("""const fs = require('node:fs');
+const [open, read, close] = [fs.openSync, fs.readSync, fs.closeSync];
+let input, reads = 0, closed = false;
+fs.openSync = function(path, ...args) {
+  const fd = open.call(this, path, ...args);
+  if (path === process.argv[3]) input = fd;
+  return fd;
+};
+fs.readSync = function(fd, buffer, offset, length, ...args) {
+  if (fd === input) {
+    if (length > 65536) throw new Error('unbounded read');
+    if (++reads === 2) throw new Error('injected read failure');
+  }
+  return read.call(this, fd, buffer, offset, length, ...args);
+};
+fs.closeSync = function(fd) {
+  if (fd === input) closed = true;
+  return close.call(this, fd);
+};
+process.on('exit', () => { if (reads !== 2 || !closed) process.exitCode = 93; });
+""", encoding='utf-8')
+    failed_output = root / 'read-failure.dta'
+    failure = subprocess.run(['node', '--require', str(preload), str(CLI), 'import-jsonl',
+                              str(source), str(failed_output)], capture_output=True, text=True)
+    assert failure.returncode == 1 and 'JSONL line 2: could not read input' in failure.stderr, failure
+    assert not failed_output.exists()
+    print('PASS chunked import: split Unicode, CRLF, boundary EOF, read failure and close', flush=True)
     # Inject a destination write error after output has begun to exercise cleanup.
     preload = root / 'write-failure.cjs'
     preload.write_text("""const fs = require('node:fs');
