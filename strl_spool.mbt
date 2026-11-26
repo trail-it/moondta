@@ -1,4 +1,11 @@
 ///|
+priv struct CachedStrL {
+  kind : Int
+  bytes : Bytes
+  key : (Int, Int)
+}
+
+///|
 // Scratch records contain an 8-byte chain link and 4-byte hash, followed by
 // the actual DTA GSO header (20 bytes) and payload. Links are biased by one
 // so that zero denotes an empty bucket. All fields use the target byte order.
@@ -6,6 +13,7 @@ priv struct StrLSpool {
   file : ScratchFile
   endian : Endian
   heads : FixedArray[Int64]
+  cache : FixedArray[CachedStrL?]
   mut size : Int64
 }
 
@@ -20,6 +28,7 @@ fn StrLSpool::new(
     endian,
     size: 0L,
     heads: FixedArray::make(if has_strls { 65536 } else { 0 }, 0L),
+    cache: FixedArray::make(if has_strls { 1024 } else { 0 }, None),
   }
 }
 
@@ -62,6 +71,15 @@ fn StrLSpool::intern(
   key : (Int, Int),
 ) -> (Int, Int) raise {
   let hash = payload.hash()
+  // At most 1 MiB of payloads. Cold lookups always consult the disk chain.
+  let slot = hash & (self.cache.length() - 1)
+  let small = payload.length() <= 1024
+  if small &&
+    self.cache[slot] is Some(hit) &&
+    hit.kind == kind &&
+    hit.bytes == payload {
+    return hit.key
+  }
   let bucket = hash & (self.heads.length() - 1)
   let mut link = self.heads[bucket]
   while link != 0L {
@@ -80,7 +98,11 @@ fn StrLSpool::intern(
     if stored_kind == kind &&
       length == payload.length() &&
       self.matches(pos + 32L, payload) {
-      return (col, row)
+      let found = (col, row)
+      if small {
+        self.cache[slot] = Some({ kind, bytes: payload, key: found, })
+      }
+      return found
     }
   }
   let header = Sink::new(self.endian)
@@ -93,6 +115,9 @@ fn StrLSpool::intern(
   }
   self.heads[bucket] = self.size + 1L
   self.size += 32L + payload.length().to_int64()
+  if small {
+    self.cache[slot] = Some({ kind, bytes: payload, key, })
+  }
   key
 }
 

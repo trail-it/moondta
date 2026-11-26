@@ -31,5 +31,6 @@ jobs:
       - run: python tests/interop.py
       - run: python tests/compat_interop.py
       - run: python tests/jsonl_interop.py
+      - run: python tests/streaming_import.py
       - run: python tests/wide.py
       - run: python tests/package_consumer.py
