@@ -20,6 +20,7 @@ with tempfile.TemporaryDirectory(prefix="moondta-consumer-") as directory:
         names = package.namelist()
         required = {"moon.mod", "moon.pkg", "reader.mbt", "writer.mbt", "pkg.generated.mbti",
                     "stream_writer.mbt", "strl_spool.mbt", "cmd/main/jsonl_output.mbt",
+                    "stream_reader.mbt", "read_index.mbt", "file_layout.mbt", "cmd/main/dta_input.mbt",
                     "LICENSE", "third_party/ReadStat-LICENSE", "README.md", "examples/survey.json"}
         assert required <= set(names)
         for name in names:
@@ -34,6 +35,7 @@ with tempfile.TemporaryDirectory(prefix="moondta-consumer-") as directory:
     lines = root / "survey.jsonl"
     restored = root / "restored.dta"
     subprocess.run([*cli, "import", library / "examples/survey.json", sample], check=True)
+    subprocess.run([*cli, "verify", sample], check=True)
     subprocess.run([*cli, "export-jsonl", sample, lines], check=True)
     subprocess.run([*cli, "import-jsonl", lines, restored], check=True)
     assert restored.read_bytes() == sample.read_bytes()

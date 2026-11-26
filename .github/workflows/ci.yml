@@ -32,5 +32,7 @@ jobs:
       - run: python tests/compat_interop.py
       - run: python tests/jsonl_interop.py
       - run: python tests/streaming_import.py
+      - run: python tests/streaming_read.py
+      - run: python tests/large_dta_read.py --rows 3500
       - run: python tests/wide.py
       - run: python tests/package_consumer.py

@@ -197,3 +197,76 @@ test "typed documents validate version and row shape at import" {
   fields["rows"] = []
   assert_eq(from_exchange(doc).rows, [])
 }
+
+///|
+test "seekable projection and corruption keep absolute byte offsets above 2 GiB" {
+  let count = 600000000
+  let original = encode({
+    schema: Schema::new([Column::new("id", Int32)]),
+    rows: [[Integer(0)]],
+  })
+  let data = find_tag(original, "<data>") + 6
+  let map = find_tag(original, "<map>") + 5
+  let extra = (count - 1).to_int64() * 4L
+  let last = data.to_int64() + extra
+  let length = original.length().to_int64() + extra
+  let mut header = put_uint(
+    original,
+    find_tag(original, "<N>") + 3,
+    count.to_uint64(),
+    8,
+  )
+  for field in 10..<14 {
+    let pos = map + field * 8
+    let mut value = 0UL
+    for j in 0..<8 {
+      value = value | (original[pos + j].to_uint64() << (j * 8))
+    }
+    header = put_uint(header, pos, value + extra.reinterpret_as_uint64(), 8)
+  }
+  let scratch : ScratchFile = {
+    read_at: (_, _) => fail("unexpected index read"),
+    write_at: (_, _) => fail("unexpected index write"),
+  }
+  for corrupt in [false, true] {
+    let reader = open_stream(
+      length,
+      (pos, n) => {
+        assert_true(n <= 65536)
+        Bytes::makei(n, i => {
+          let at = pos + i.to_int64()
+          if at < data.to_int64() {
+            header[at.to_int()]
+          } else if at >= last + 4L {
+            original[(at - extra).to_int()]
+          } else if corrupt && at == last + 3L {
+            b'\x80'
+          } else if !corrupt && at == last {
+            b'\x58'
+          } else {
+            b'\x00'
+          }
+        })
+      },
+      scratch~,
+    )
+    let lines = []
+    if corrupt {
+      try {
+        reader.export_jsonl(s => lines.push(s), offset=count - 2)
+        abort("expected reserved minimum")
+      } catch {
+        @dta.InvalidFile(offset~, message~) => {
+          assert_eq(offset, last)
+          assert_eq(message, "integer uses reserved minimum")
+        }
+        e => raise e
+      }
+      assert_eq(lines.length(), 2)
+    } else {
+      reader.export_jsonl(s => lines.push(s), offset=count - 2)
+      assert_eq(lines[1], "[{\"int\":0}]\n")
+      assert_eq(lines[2], "[{\"int\":88}]\n")
+    }
+  }
+}
