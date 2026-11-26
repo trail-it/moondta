@@ -19,6 +19,7 @@ with tempfile.TemporaryDirectory(prefix="moondta-consumer-") as directory:
     with ZipFile(archive) as package:
         names = package.namelist()
         required = {"moon.mod", "moon.pkg", "reader.mbt", "writer.mbt", "pkg.generated.mbti",
+                    "stream_writer.mbt", "strl_spool.mbt", "cmd/main/jsonl_output.mbt",
                     "LICENSE", "third_party/ReadStat-LICENSE", "README.md", "examples/survey.json"}
         assert required <= set(names)
         for name in names:

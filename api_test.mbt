@@ -105,3 +105,35 @@ test "streamed output matches the public encoder including strL and endianness" 
     }
   }
 }
+
+///|
+test "stream writes a header-only DTA and propagates short scratch reads" {
+  let lines = []
+  let empty : @dta.Dataset = { schema: @dta.Schema::new([]), rows: [], }
+  @dta.open(@dta.encode(empty)).export_jsonl(line => lines.push(line))
+  let empty_source = lines.iter()
+  let scratch : @dta.ScratchFile = {
+    read_at: (_, _) => fail("unexpected scratch read"),
+    write_at: (_, _) => fail("unexpected scratch write"),
+  }
+  let (output, bytes) = test_file()
+  @dta.write_jsonl(() => empty_source.next(), output.write_at, scratch~)
+  assert_eq(Bytes::from_array(bytes), @dta.encode(empty))
+  let data : @dta.Dataset = {
+    schema: @dta.Schema::new([@dta.Column::new("s", @dta.StrL)]),
+    rows: [[@dta.Text("abc")]],
+  }
+  let more = []
+  @dta.open(@dta.encode(data)).export_jsonl(line => more.push(line))
+  let source = more.iter()
+  let short : @dta.ScratchFile = {
+    read_at: (_, _) => b"",
+    write_at: (_, _) => (),
+  }
+  try {
+    @dta.write_jsonl(() => source.next(), (_, _) => (), scratch=short)
+    abort("expected a short-read error")
+  } catch {
+    e => assert_true(e.to_string().contains("short strL scratch read"))
+  }
+}

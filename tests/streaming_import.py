@@ -49,11 +49,11 @@ fs.closeSync = function (fd) {
   return close.call(this, fd);
 };
 fs.linkSync = function (from, to) {
-  if (mode === 'race') {
+  if (mode === 'race' || mode === 'race-copy') {
     touched = true;
     fs.writeFileSync(to, 'another importer won', {flag: 'wx'});
   }
-  if (mode === 'fallback') {
+  if (mode === 'fallback' || mode === 'race-copy') {
     const e = new Error('no hard links');
     e.code = 'ENOTSUP';
     throw e;
@@ -87,7 +87,7 @@ with tempfile.TemporaryDirectory(prefix='moondta-staging-') as directory:
         print(json.dumps(dict(moondta_jsonl=1, schema=schema, rows=len(rows)), ensure_ascii=False), file=f)
         for row in rows:
             print(json.dumps(row, ensure_ascii=False), file=f)
-    for mode in ('short', 'fallback', 'data', 'scratch', 'replay', 'patch', 'race'):
+    for mode in ('short', 'fallback', 'data', 'scratch', 'replay', 'patch', 'race', 'race-copy'):
         output = root / f'{mode}.dta'
         proc = subprocess.run(['node', '--require', str(hook), str(CLI), 'import-jsonl', str(source),
                                str(output), '--version', '119', '--endian', 'big'],
@@ -98,7 +98,7 @@ with tempfile.TemporaryDirectory(prefix='moondta-staging-') as directory:
             assert output.read_bytes() == oracle.read_bytes(), mode
         else:
             assert proc.returncode == 1, proc
-            if mode == 'race':
+            if mode in ('race', 'race-copy'):
                 assert output.read_text() == 'another importer won'
             else:
                 assert not output.exists(), mode
