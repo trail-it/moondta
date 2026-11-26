@@ -41,6 +41,28 @@ fn load(path : String) -> Bytes raise {
 }
 
 ///|
+fn load_jsonl(path : String) -> @dta.Dataset raise {
+  let bytes = load(path)
+  let mut start = 0
+  let mut line_number = 0
+  @dta.from_jsonl(() => {
+    if start == bytes.length() {
+      return None
+    }
+    let mut end = start
+    while end < bytes.length() && bytes[end] != 10 {
+      end += 1
+    }
+    line_number += 1
+    let line = @utf8.decode(bytes[start:end]) catch {
+      _ => fail("JSONL line \{line_number}: invalid UTF-8")
+    }
+    start = if end < bytes.length() { end + 1 } else { end }
+    Some(line)
+  })
+}
+
+///|
 fn save(path : String, bytes : Bytes) -> Unit raise {
   if write_file(path, bytes) is Some(message) {
     fail("cannot create \{path}: \{message}")
@@ -77,6 +99,7 @@ fn help() -> Unit {
       #|  export INPUT.dta OUTPUT.json [--columns a,b] [--offset N] [--limit N]
       #|  export-jsonl INPUT.dta OUTPUT.jsonl [--columns a,b] [--offset N] [--limit N] [--batch-size N]
       #|  import INPUT.json OUTPUT.dta [--version 118|119] [--endian little|big]
+      #|  import-jsonl INPUT.jsonl OUTPUT.dta [--version 118|119] [--endian little|big]
       #|  convert INPUT.dta OUTPUT.dta [--version 118|119] [--endian little|big]
       #|  select INPUT.dta OUTPUT.dta --columns a,b [--offset N] [--limit N]
       #|Output paths must not already exist. inspect validates metadata; verify scans every cell.
@@ -126,7 +149,8 @@ fn run() -> Unit raise {
         key == "--limit" ||
         key == "--width" ||
         key == "--labels"
-      "import" | "convert" => key == "--version" || key == "--endian"
+      "import" | "import-jsonl" | "convert" =>
+        key == "--version" || key == "--endian"
       _ => false
     }
     if !allowed || options.contains(key) {
@@ -135,9 +159,12 @@ fn run() -> Unit raise {
     options[key] = argv[i + 1]
     i += 2
   }
-  if command == "import" {
-    let json = @json.parse(@utf8.decode(load(argv[1])[:]))
-    let data = @dta.from_exchange(json)
+  if command == "import" || command == "import-jsonl" {
+    let data = if command == "import-jsonl" {
+      load_jsonl(argv[1])
+    } else {
+      @dta.from_exchange(@json.parse(@utf8.decode(load(argv[1])[:])))
+    }
     save(argv[2], @dta.encode(change_format(data, options)))
     return
   }
