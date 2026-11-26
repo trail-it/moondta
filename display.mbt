@@ -77,9 +77,9 @@ pub fn Reader::preview(
   let remaining = self.count - offset
   let count = if limit < remaining { limit } else { remaining }
   let indices = self.indices(columns)
-  let rows = self.read_rows(offset~, limit=count, columns=indices)
+  let rows = self.decode_rows(offset, count, indices)
   let sets : Map[String, Map[Int, String]] = Map([])
-  if labels {
+  if labels && count > 0 {
     for set in self.metadata.value_labels {
       let entries : Map[Int, String] = Map([])
       for entry in set.entries {
@@ -89,9 +89,12 @@ pub fn Reader::preview(
     }
   }
   let out = StringBuilder()
-  out.write_string(
-    "Rows \{offset + (if count == 0 { 0 } else { 1 })}–\{offset + count} of \{self.count}\n\n| Row |",
-  )
+  if count == 0 {
+    out.write_string("Showing 0 of \{self.count} rows")
+  } else {
+    out.write_string("Rows \{offset + 1}–\{offset + count} of \{self.count}")
+  }
+  out.write_string("\n\n| Row |")
   for i in indices {
     out.write_string(" \{display_text(self.metadata.columns[i].name, 32)} |")
   }

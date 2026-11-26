@@ -41,7 +41,12 @@ test "preview renders numbers, labelled missing, binary, escaped controls and Un
   assert_true(dictionary.contains("调查"))
   assert_true(dictionary.contains("| .a | \"拒绝回答\" |"))
   assert_true(dictionary.contains("strL"))
-  assert_true(reader.preview(offset=2).contains("Rows 2–2 of 2"))
+  assert_true(reader.preview(offset=2).has_prefix("Showing 0 of 2 rows"))
+  assert_true(reader.preview(limit=0).has_prefix("Showing 0 of 2 rows"))
+  assert_true(reader.preview(offset=1, limit=1).has_prefix("Rows 2–2 of 2"))
+  let empty = open(encode({ schema, rows: [], })).preview(columns=[0])
+  assert_true(empty.has_prefix("Showing 0 of 0 rows"))
+  assert_true(empty.contains("| Row | \"回答\" |"))
   rejects(() => ignore(reader.preview(offset=3)))
   rejects(() => ignore(reader.preview(max_chars=0)))
 }
