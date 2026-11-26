@@ -181,3 +181,19 @@ test "verification checks unreferenced text and last-batch references" {
   assert_eq(r.read_rows(), [[Text("")], [Text("")], [Binary(b"\\xff")]])
   rejects(() => r.verify())
 }
+
+///|
+test "typed documents validate version and row shape at import" {
+  let schema = Schema::new([Column::new("n", Int32)])
+  let doc = Dataset::{ schema, rows: [[Integer(1)]], }.to_exchange()
+  guard doc is Object(fields) else { abort("expected test document") }
+  fields["moondta_exchange"] = 1.5
+  rejects(() => ignore(from_exchange(doc)))
+  fields["moondta_exchange"] = 1
+  for row in ([[], [{ "int": 1 }, { "int": 2 }], { "int": 3 }] : Array[Json]) {
+    fields["rows"] = [row]
+    rejects(() => ignore(from_exchange(doc)))
+  }
+  fields["rows"] = []
+  assert_eq(from_exchange(doc).rows, [])
+}

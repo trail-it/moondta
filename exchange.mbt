@@ -22,7 +22,7 @@ priv struct WireDataset {
   moondta_exchange : Int
   schema : WireSchema
   rows : Array[Array[Json]]
-} derive(ToJson, @json.FromJson)
+} derive(ToJson)
 
 ///|
 fn wire_schema(s : Schema) -> WireSchema {
@@ -159,14 +159,26 @@ fn parse_bits(s : String) -> UInt64 raise DtaError {
 /// Parse exchange version 1. Schema and wire types are checked here; encode
 /// additionally validates each cell against its declared storage type.
 pub fn from_exchange(json : Json) -> Dataset raise DtaError {
-  let wire : WireDataset = @json.from_json(json) catch {
-    e => raise Invalid(offset=0, message="invalid exchange document: \{e}")
+  guard json
+    is {
+      "moondta_exchange": version,
+      "schema": raw_schema,
+      "rows": Array(raw_rows),
+      ..
+    } else {
+    raise Invalid(
+      offset=0,
+      message="expected exchange header, schema and row array",
+    )
   }
-  if wire.moondta_exchange != 1 {
+  if exact_int(version) != 1 {
     invalid(0, "unsupported MoonDTA exchange version")
   }
-  let schema = parse_wire_schema(wire.schema)
-  let rows = wire.rows.map(row => row.map(value_from_wire))
+  let wire_schema : WireSchema = @json.from_json(raw_schema) catch {
+    e => raise Invalid(offset=0, message="invalid exchange schema: \{e}")
+  }
+  let schema = parse_wire_schema(wire_schema)
+  let rows = raw_rows.map(row => row_from_wire(row, schema.columns.length()))
   { schema, rows, }
 }
 
@@ -188,6 +200,17 @@ fn parse_wire_schema(s : WireSchema) -> Schema raise DtaError {
   }
   validate_schema(schema)
   schema
+}
+
+///|
+fn row_from_wire(row : Json, width : Int) -> Array[Value] raise DtaError {
+  guard row is Array(cells) else {
+    raise Invalid(offset=0, message="expected a row array")
+  }
+  if width == 0 || cells.length() != width {
+    invalid(0, "row width differs from schema or schema has no columns")
+  }
+  cells.map(value_from_wire)
 }
 
 ///|
@@ -248,15 +271,7 @@ pub fn from_jsonl(next_line : () -> String? raise) -> Dataset raise {
     guard next_line() is Some(line) else {
       fail("JSONL line \{n}: expected a row, found EOF")
     }
-    let row = try {
-      guard @json.parse(line) is Array(cells) else {
-        fail("expected a row array")
-      }
-      if cells.length() != schema.columns.length() {
-        fail("row width differs from schema")
-      }
-      cells.map(value_from_wire)
-    } catch {
+    let row = row_from_wire(@json.parse(line), schema.columns.length()) catch {
       e => fail("JSONL line \{n}: \{e}")
     }
     rows.push(row)
