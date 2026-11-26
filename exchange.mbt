@@ -244,8 +244,18 @@ fn value_from_wire(j : Json) -> Value raise DtaError {
 /// and row count. One array follows per row. The returned dataset retains its rows;
 /// encode checks representability in the declared DTA storage types.
 pub fn from_jsonl(next_line : () -> String? raise) -> Dataset raise {
+  let (schema, count) = jsonl_header(next_line)
+  let rows = []
+  visit_jsonl_rows(next_line, count, schema.columns.length(), (_, row) => {
+    rows.push(row)
+  })
+  { schema, rows, }
+}
+
+///|
+fn jsonl_header(next_line : () -> String? raise) -> (Schema, Int) raise {
   guard next_line() is Some(first) else { fail("JSONL line 1: missing header") }
-  let (schema, count) = try {
+  try {
     guard @json.parse(first)
       is { "moondta_jsonl": version, "rows": size, "schema": raw, .. } else {
       fail("expected header with moondta_jsonl, rows and schema")
@@ -265,19 +275,26 @@ pub fn from_jsonl(next_line : () -> String? raise) -> Dataset raise {
   } catch {
     e => fail("JSONL line 1: \{e}")
   }
-  let rows = []
+}
+
+///|
+fn visit_jsonl_rows(
+  next_line : () -> String? raise,
+  count : Int,
+  width : Int,
+  visit : (Int, Array[Value]) -> Unit raise,
+) -> Unit raise {
   for i in 0..<count {
     let n = i.to_int64() + 2L
     guard next_line() is Some(line) else {
       fail("JSONL line \{n}: expected a row, found EOF")
     }
-    let row = row_from_wire(@json.parse(line), schema.columns.length()) catch {
+    let row = row_from_wire(@json.parse(line), width) catch {
       e => fail("JSONL line \{n}: \{e}")
     }
-    rows.push(row)
+    visit(i + 1, row)
   }
   if next_line() is Some(_) {
     fail("JSONL line \{count.to_int64() + 2L}: extra record")
   }
-  { schema, rows, }
 }

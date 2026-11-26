@@ -134,7 +134,68 @@ pub fn encode(dataset : Dataset) -> Bytes raise DtaError {
   }
   ignore(checked_product(row_width, n, 0))
   let w = Sink::new(s.endian)
-  let offsets = Array::make(14, 0)
+  let offsets = Array::make(14, 0L)
+  let map_start = write_header(w, s, n, offsets)
+  let gso = Sink::new(s.endian)
+  let shared : Map[StrLContent, (Int, Int)] = Map([])
+  for r, row in dataset.rows {
+    if row.length() != k {
+      invalid(w.bytes.length(), "row \{r} has wrong number of cells")
+    }
+    for col, value in row {
+      let storage = s.columns[col].storage
+      if storage == StrL {
+        let content = strl_content(value, w.bytes.length(), col + 1, r + 1)
+        let reference = match content {
+          None => (0, 0)
+          Some(content) =>
+            match shared.get(content) {
+              Some(key) => key
+              None => {
+                let key = (col + 1, r + 1)
+                let (kind, payload) = content.payload(w.bytes.length())
+                write_gso_header(gso, key, kind, payload.length())
+                gso.raw(payload[:])
+                shared[content] = key
+                key
+              }
+            }
+        }
+        write_reference(w, s.version, reference)
+      } else {
+        write_inline_cell(w, storage, value, col + 1, r + 1)
+      }
+    }
+  }
+  w.text("</data>")
+  offsets[10] = w.bytes.length().to_int64()
+  w.text("<strls>")
+  w.append(gso)
+  w.text("</strls>")
+  offsets[11] = w.bytes.length().to_int64()
+  write_value_labels(w, s)
+  offsets[12] = w.bytes.length().to_int64()
+  w.text("</stata_dta>")
+  offsets[13] = w.bytes.length().to_int64()
+  let mapping = encode_map(s.endian, offsets)
+  let body = w.bytes.view()
+  Bytes::makei(body.length(), i => {
+    if i >= map_start && i < map_start + mapping.length() {
+      mapping[i - map_start]
+    } else {
+      body[i]
+    }
+  })
+}
+
+///|
+fn write_header(
+  w : Sink,
+  s : Schema,
+  n : Int,
+  offsets : Array[Int64],
+) -> Int raise DtaError {
+  let k = s.columns.length()
   w.text("<stata_dta><header><release>\{s.version}</release><byteorder>")
   w.text(if s.endian == Little { "LSF" } else { "MSF" })
   w.text("</byteorder><K>")
@@ -151,26 +212,26 @@ pub fn encode(dataset : Dataset) -> Bytes raise DtaError {
   w.uint(timestamp.length().to_uint64(), 1)
   w.raw(timestamp[:])
   w.text("</timestamp></header>")
-  offsets[1] = w.bytes.length()
+  offsets[1] = w.bytes.length().to_int64()
   w.text("<map>")
   let map_start = w.bytes.length()
   for _ in 0..<14 {
     w.uint(0, 8)
   }
   w.text("</map>")
-  offsets[2] = w.bytes.length()
+  offsets[2] = w.bytes.length().to_int64()
   w.text("<variable_types>")
   for c in s.columns {
     w.uint(c.storage.code().to_uint64(), 2)
   }
   w.text("</variable_types>")
-  offsets[3] = w.bytes.length()
+  offsets[3] = w.bytes.length().to_int64()
   w.text("<varnames>")
   for c in s.columns {
     w.fixed(c.name, 129)
   }
   w.text("</varnames>")
-  offsets[4] = w.bytes.length()
+  offsets[4] = w.bytes.length().to_int64()
   w.text("<sortlist>")
   for col in s.sort_order {
     w.uint(col.to_uint64(), k_width)
@@ -179,25 +240,25 @@ pub fn encode(dataset : Dataset) -> Bytes raise DtaError {
     w.uint(0, k_width)
   }
   w.text("</sortlist>")
-  offsets[5] = w.bytes.length()
+  offsets[5] = w.bytes.length().to_int64()
   w.text("<formats>")
   for c in s.columns {
     w.fixed(c.format, 57)
   }
   w.text("</formats>")
-  offsets[6] = w.bytes.length()
+  offsets[6] = w.bytes.length().to_int64()
   w.text("<value_label_names>")
   for c in s.columns {
     w.fixed(c.value_labels, 129)
   }
   w.text("</value_label_names>")
-  offsets[7] = w.bytes.length()
+  offsets[7] = w.bytes.length().to_int64()
   w.text("<variable_labels>")
   for c in s.columns {
     w.fixed(c.label, 321)
   }
   w.text("</variable_labels>")
-  offsets[8] = w.bytes.length()
+  offsets[8] = w.bytes.length().to_int64()
   w.text("<characteristics>")
   for ch in s.characteristics {
     w.text("<ch>")
@@ -208,33 +269,13 @@ pub fn encode(dataset : Dataset) -> Bytes raise DtaError {
     w.text("</ch>")
   }
   w.text("</characteristics>")
-  offsets[9] = w.bytes.length()
+  offsets[9] = w.bytes.length().to_int64()
   w.text("<data>")
-  let gso = Sink::new(s.endian)
-  let shared : Map[StrLContent, (Int, Int)] = Map([])
-  for r, row in dataset.rows {
-    if row.length() != k {
-      invalid(w.bytes.length(), "row \{r} has wrong number of cells")
-    }
-    for col, value in row {
-      write_cell(
-        w,
-        gso,
-        shared,
-        s.columns[col].storage,
-        value,
-        s.version,
-        col + 1,
-        r + 1,
-      )
-    }
-  }
-  w.text("</data>")
-  offsets[10] = w.bytes.length()
-  w.text("<strls>")
-  w.append(gso)
-  w.text("</strls>")
-  offsets[11] = w.bytes.length()
+  map_start
+}
+
+///|
+fn write_value_labels(w : Sink, s : Schema) -> Unit raise DtaError {
   w.text("<value_labels>")
   for set in s.value_labels {
     let entries = set.entries.copy()
@@ -268,32 +309,78 @@ pub fn encode(dataset : Dataset) -> Bytes raise DtaError {
     w.text("</lbl>")
   }
   w.text("</value_labels>")
-  offsets[12] = w.bytes.length()
-  w.text("</stata_dta>")
-  offsets[13] = w.bytes.length()
-  let map_bytes = Sink::new(s.endian)
-  for pos in offsets {
-    map_bytes.uint(pos.to_uint64(), 8)
-  }
-  let body = w.bytes.view()
-  let mapping = map_bytes.bytes.view()
-  Bytes::makei(body.length(), i => {
-    if i >= map_start && i < map_start + mapping.length() {
-      mapping[i - map_start]
-    } else {
-      body[i]
-    }
-  })
 }
 
 ///|
-fn write_cell(
+fn encode_map(endian : Endian, offsets : Array[Int64]) -> Bytes {
+  let map = Sink::new(endian)
+  for offset in offsets {
+    map.uint(offset.reinterpret_as_uint64(), 8)
+  }
+  map.bytes.to_bytes()
+}
+
+///|
+fn strl_content(
+  value : Value,
+  pos : Int,
+  col : Int,
+  row : Int,
+) -> StrLContent? raise DtaError {
+  match value {
+    Text("") => None
+    Text(t) => Some(Text(t))
+    Binary(b) => Some(Binary(b))
+    _ =>
+      raise Invalid(
+        offset=pos,
+        message="cell does not match declared storage at row \{row}, column \{col}",
+      )
+  }
+}
+
+///|
+fn StrLContent::payload(
+  self : StrLContent,
+  pos : Int,
+) -> (Int, Bytes) raise DtaError {
+  match self {
+    Text(t) => {
+      if t.contains("\u0000") {
+        invalid(pos, "strL text contains NUL; use Binary")
+      }
+      (130, @utf8.encode(t + "\u0000"))
+    }
+    Binary(b) => (129, b)
+  }
+}
+
+///|
+fn write_reference(w : Sink, version : Int, key : (Int, Int)) -> Unit {
+  let width = if version == 118 { 2 } else { 3 }
+  w.uint(key.0.to_uint64(), width)
+  w.uint(key.1.to_uint64(), 8 - width)
+}
+
+///|
+fn write_gso_header(
   w : Sink,
-  gso : Sink,
-  shared : Map[StrLContent, (Int, Int)],
+  key : (Int, Int),
+  kind : Int,
+  length : Int,
+) -> Unit {
+  w.text("GSO")
+  w.uint(key.0.to_uint64(), 4)
+  w.uint(key.1.to_uint64(), 8)
+  w.uint(kind.to_uint64(), 1)
+  w.uint(length.to_uint64(), 4)
+}
+
+///|
+fn write_inline_cell(
+  w : Sink,
   storage : Storage,
   value : Value,
-  version : Int,
   col : Int,
   row : Int,
 ) -> Unit raise DtaError {
@@ -311,41 +398,6 @@ fn write_cell(
       for _ in b.length()..<n {
         w.uint(0, 1)
       }
-    }
-    (StrL, Text("")) => w.uint(0, 8)
-    (StrL, Text(_) | Binary(_)) => {
-      let vlen = if version == 118 { 2 } else { 3 }
-      let content : StrLContent = match value {
-        Text(t) => Text(t)
-        Binary(b) => Binary(b)
-        _ => abort("unreachable")
-      }
-      // Reuse the first row/column reference across all strL columns. Keep
-      // text and binary separate even when their encoded bytes are identical.
-      if shared.get(content) is Some((v, o)) {
-        w.uint(v.to_uint64(), vlen)
-        w.uint(o.to_uint64(), 8 - vlen)
-        return
-      }
-      w.uint(col.to_uint64(), vlen)
-      w.uint(row.to_uint64(), 8 - vlen)
-      let (kind, payload) = match value {
-        Text(t) => {
-          if t.contains("\u0000") {
-            invalid(p, "strL text contains NUL; use Binary")
-          }
-          (130, @utf8.encode(t + "\u0000"))
-        }
-        Binary(b) => (129, b)
-        _ => abort("unreachable")
-      }
-      gso.text("GSO")
-      gso.uint(col.to_uint64(), 4)
-      gso.uint(row.to_uint64(), 8)
-      gso.uint(kind.to_uint64(), 1)
-      gso.uint(payload.length().to_uint64(), 4)
-      gso.raw(payload[:])
-      shared[content] = (col, row)
     }
     (Byte | Int16 | Int32, Integer(n)) => {
       let (min, max) = match storage {
