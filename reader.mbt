@@ -70,8 +70,16 @@ pub fn Reader::column_indices(
   self : Reader,
   names : Array[String],
 ) -> Array[Int] raise DtaError {
+  self.metadata.named_indices(names)
+}
+
+///|
+fn Schema::named_indices(
+  self : Schema,
+  names : Array[String],
+) -> Array[Int] raise DtaError {
   let lookup : Map[String, Int] = Map([])
-  for i, col in self.metadata.columns {
+  for i, col in self.columns {
     lookup[col.name] = i
   }
   names.map(name => {
@@ -101,11 +109,11 @@ fn Reader::read_strl(
 }
 
 ///|
-fn Reader::read_strl_key(
-  self : Reader,
+fn Cursor::strl_key(
   c : Cursor,
+  version : Int,
 ) -> (UInt64, UInt64) raise DtaError {
-  let vlen = if self.metadata.version == 118 { 2 } else { 3 }
+  let vlen = if version == 118 { 2 } else { 3 }
   let variable = c.uint(vlen)
   let observation = c.uint(8 - vlen)
   (variable, observation)
@@ -141,7 +149,7 @@ pub fn Reader::verify(
       for col in self.metadata.columns {
         if col.storage == StrL {
           let p = c.pos
-          let key = self.read_strl_key(c)
+          let key = c.strl_key(self.metadata.version)
           if key != (0UL, 0UL) && !self.strls.contains(key) {
             invalid(p, "unresolved strL reference")
           }
@@ -178,20 +186,13 @@ pub fn Reader::read_rows(
   limit? : Int = self.count - offset,
   columns? : Array[Int],
 ) -> Array[Array[Value]] raise DtaError {
-  self.check_range(offset, limit)
-  self.decode_rows(offset, limit, self.indices(columns))
+  check_range(self.count, offset, limit)
+  self.decode_rows(offset, limit, self.metadata.indices(columns))
 }
 
 ///|
-fn Reader::check_range(
-  self : Reader,
-  offset : Int,
-  limit : Int,
-) -> Unit raise DtaError {
-  if offset < 0 ||
-    offset > self.count ||
-    limit < 0 ||
-    limit > self.count - offset {
+fn check_range(count : Int, offset : Int, limit : Int) -> Unit raise DtaError {
+  if offset < 0 || offset > count || limit < 0 || limit > count - offset {
     invalid(0, "row range outside dataset")
   }
 }
@@ -207,11 +208,11 @@ pub fn Reader::each_batch(
   columns? : Array[Int],
   batch_size? : Int = 256,
 ) -> Unit raise {
-  self.check_range(offset, limit)
+  check_range(self.count, offset, limit)
   if batch_size <= 0 {
     invalid(0, "batch size must be positive")
   }
-  let indices = self.indices(columns).copy()
+  let indices = self.metadata.indices(columns).copy()
   let mut pos = offset
   let end = offset + limit
   while pos < end {
@@ -244,16 +245,16 @@ fn Reader::decode_rows(
 }
 
 ///|
-fn Reader::indices(
-  self : Reader,
+fn Schema::indices(
+  self : Schema,
   selected : Array[Int]?,
 ) -> Array[Int] raise DtaError {
   let indices = selected.unwrap_or_else(() => {
-    Array::makei(self.metadata.columns.length(), i => i)
+    Array::makei(self.columns.length(), i => i)
   })
   let seen : Map[Int, Bool] = Map([])
   for i in indices {
-    if i < 0 || i >= self.metadata.columns.length() || seen.contains(i) {
+    if i < 0 || i >= self.columns.length() || seen.contains(i) {
       invalid(0, "invalid or duplicate column index")
     }
     seen[i] = true
@@ -275,11 +276,19 @@ pub fn Reader::select(
   offset? : Int = 0,
   limit? : Int = self.count - offset,
 ) -> Dataset raise DtaError {
-  let indices = self.indices(Some(columns))
+  let indices = self.metadata.indices(Some(columns))
   if indices.is_empty() && limit > 0 {
     invalid(0, "cannot select zero variables from nonempty rows")
   }
-  let s = self.schema()
+  {
+    schema: self.metadata.project(indices),
+    rows: self.read_rows(offset~, limit~, columns=indices),
+  }
+}
+
+///|
+fn Schema::project(self : Schema, indices : Array[Int]) -> Schema {
+  let s = clone_schema(self)
   let selected = indices.map(i => s.columns[i])
   let positions : Map[Int, Int] = Map([])
   for i, old in indices {
@@ -295,10 +304,7 @@ pub fn Reader::select(
   let characteristics = s.characteristics.filter(c => {
     c.variable == "_dta" || selected.any(col => col.name == c.variable)
   })
-  {
-    schema: { ..s, columns: selected, sort_order, characteristics, },
-    rows: self.read_rows(offset~, limit~, columns=indices),
-  }
+  { ..s, columns: selected, sort_order, characteristics, }
 }
 
 ///|
@@ -308,27 +314,35 @@ fn Reader::read_cell(
   storage : Storage,
   cache : Map[(UInt64, UInt64), Value],
 ) -> Value raise DtaError {
+  if storage == StrL {
+    let p = c.pos
+    let key = c.strl_key(self.metadata.version)
+    if key == (0UL, 0UL) {
+      Text("")
+    } else {
+      if cache.get(key) is Some(value) {
+        return value
+      }
+      match self.strls.get(key) {
+        Some(object) => {
+          let value = self.read_strl(object)
+          cache[key] = value
+          value
+        }
+        None => raise Invalid(offset=p, message="unresolved strL reference")
+      }
+    }
+  } else {
+    c.inline_cell(storage)
+  }
+}
+
+///|
+fn Cursor::inline_cell(c : Cursor, storage : Storage) -> Value raise DtaError {
   let p = c.pos
   match storage {
     Str(n) => Text(c.cstring(n, terminated=false))
-    StrL => {
-      let key = self.read_strl_key(c)
-      if key == (0UL, 0UL) {
-        Text("")
-      } else {
-        if cache.get(key) is Some(value) {
-          return value
-        }
-        match self.strls.get(key) {
-          Some(object) => {
-            let value = self.read_strl(object)
-            cache[key] = value
-            value
-          }
-          None => raise Invalid(offset=p, message="unresolved strL reference")
-        }
-      }
-    }
+    StrL => raise Invalid(offset=p, message="strL requires an object index")
     Byte | Int16 | Int32 => {
       let w = storage.width()
       let raw = c.uint(w).to_int()

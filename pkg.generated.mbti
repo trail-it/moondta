@@ -15,6 +15,8 @@ pub fn from_jsonl(() -> String? raise) -> Dataset raise
 
 pub fn open(Bytes) -> Reader raise DtaError
 
+pub fn open_stream(Int64, (Int64, Int) -> Bytes raise, scratch~ : ScratchFile) -> StreamReader raise
+
 pub fn write_jsonl(() -> String? raise, (Int64, Bytes) -> Unit raise, scratch~ : ScratchFile, version? : Int, endian? : Endian) -> Unit raise
 
 // Errors
@@ -108,6 +110,16 @@ pub(all) enum Storage {
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 pub fn Storage::display_name(Self) -> String
 pub fn Storage::width(Self) -> Int raise DtaError
+
+pub struct StreamReader {
+  // private fields
+}
+pub fn StreamReader::column_count(Self) -> Int
+pub fn StreamReader::column_indices(Self, Array[String]) -> Array[Int] raise DtaError
+pub fn StreamReader::export_jsonl(Self, (String) -> Unit raise, offset? : Int, limit? : Int, columns? : Array[Int], batch_size? : Int) -> Unit raise
+pub fn StreamReader::row_count(Self) -> Int
+pub fn StreamReader::schema(Self) -> Schema
+pub fn StreamReader::verify(Self, batch_size? : Int) -> Unit raise
 
 pub(all) enum Value {
   Integer(Int)

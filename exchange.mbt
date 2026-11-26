@@ -88,25 +88,19 @@ pub fn Reader::export_jsonl(
   columns? : Array[Int],
   batch_size? : Int = 256,
 ) -> Unit raise {
-  self.check_range(offset, limit)
+  check_range(self.count, offset, limit)
   if batch_size < 1 {
     invalid(0, "batch size must be positive")
   }
-  let indices = self.indices(columns).copy()
+  let indices = self.metadata.indices(columns).copy()
   if indices.is_empty() && limit > 0 {
     invalid(0, "cannot select zero variables from nonempty rows")
   }
-  let schema = self.select(indices, offset~, limit=0).schema
-  let header : Json = {
-    "moondta_jsonl": 1,
-    "rows": limit,
-    "schema": ToJson::to_json(wire_schema(schema)),
-  }
-  write(header.stringify() + "\n")
+  write(jsonl_header_line(self.metadata.project(indices), limit))
   self.each_batch(
     (_, rows) => {
       for row in rows {
-        write(row.map(value_to_wire).to_json().stringify() + "\n")
+        write(jsonl_row_line(row))
       }
     },
     offset~,
@@ -114,6 +108,21 @@ pub fn Reader::export_jsonl(
     columns=indices,
     batch_size~,
   )
+}
+
+///|
+fn jsonl_header_line(schema : Schema, limit : Int) -> String {
+  let header : Json = {
+    "moondta_jsonl": 1,
+    "rows": limit,
+    "schema": ToJson::to_json(wire_schema(schema)),
+  }
+  header.stringify() + "\n"
+}
+
+///|
+fn jsonl_row_line(row : Array[Value]) -> String {
+  row.map(value_to_wire).to_json().stringify() + "\n"
 }
 
 ///|

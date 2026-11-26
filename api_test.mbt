@@ -137,3 +137,114 @@ test "stream writes a header-only DTA and propagates short scratch reads" {
     e => assert_true(e.to_string().contains("short strL scratch read"))
   }
 }
+
+///|
+test "seekable reader matches the memory reader across formats, projections and shared objects" {
+  let schema = @dta.Schema::new([
+    @dta.Column::new("id", @dta.Int32),
+    @dta.Column::new("a", @dta.StrL),
+    @dta.Column::new("b", @dta.StrL),
+    @dta.Column::new("f", @dta.Float64),
+  ])
+  let rows = [
+    [
+      @dta.Missing(26),
+      @dta.Text("shared"),
+      @dta.Binary(b"\xff"),
+      @dta.Number(-0.0),
+    ],
+    [@dta.Integer(-42), @dta.Binary(b""), @dta.Text("shared"), @dta.Missing(4)],
+    [@dta.Integer(17), @dta.Text(""), @dta.Binary(b"\xff"), @dta.Number(0.125)],
+  ]
+  for version in [118, 119] {
+    for endian in [@dta.Little, @dta.Big] {
+      let data : @dta.Dataset = {
+        schema: { ..schema, version, endian, sort_order: [1, 2], },
+        rows,
+      }
+      let bytes = @dta.encode(data)
+      let memory = @dta.open(bytes)
+      let (scratch, records) = test_file()
+      let reader = @dta.open_stream(
+        bytes.length().to_int64(),
+        (pos, n) => {
+          assert_true(n <= 65536)
+          bytes[pos.to_int():pos.to_int() + n].to_owned()
+        },
+        scratch~,
+      )
+      reader.verify(batch_size=1)
+      assert_eq(records.length(), 3 * 32)
+      assert_eq(reader.schema(), memory.schema())
+      assert_eq(reader.row_count(), memory.row_count())
+      assert_eq(reader.column_count(), memory.column_count())
+      let columns = reader.column_indices(["b", "a", "id", "f"])
+      let expected = []
+      memory.export_jsonl(line => expected.push(line), columns~, offset=1)
+      let actual = []
+      reader.export_jsonl(
+        line => {
+          actual.push(line)
+          columns[0] = 0
+        },
+        columns~,
+        offset=1,
+        batch_size=1,
+      )
+      assert_eq(actual, expected)
+      let empty = []
+      reader.export_jsonl(line => empty.push(line), offset=3, columns=[])
+      assert_eq(empty.length(), 1)
+    }
+  }
+}
+
+///|
+test "seekable reader requires exact input and scratch reads and propagates sink failures" {
+  let bad : @dta.ScratchFile = {
+    read_at: (_, _) => b"",
+    write_at: (_, _) => (),
+  }
+  try {
+    ignore(@dta.open_stream(400L, (_, _) => b"", scratch=bad))
+    abort("expected short input")
+  } catch {
+    @dta.InvalidFile(offset~, message~) => {
+      assert_eq(offset, 0L)
+      assert_eq(message, "short DTA read")
+    }
+    e => raise e
+  }
+  let data : @dta.Dataset = {
+    schema: @dta.Schema::new([@dta.Column::new("s", @dta.StrL)]),
+    rows: [[@dta.Text("hello")]],
+  }
+  let bytes = @dta.encode(data)
+  let read : (Int64, Int) -> Bytes raise = (pos : Int64, n : Int) => {
+    bytes[pos.to_int():pos.to_int() + n].to_owned()
+  }
+  let reader = @dta.open_stream(bytes.length().to_int64(), read, scratch=bad)
+  try {
+    reader.verify()
+    abort("expected short index read")
+  } catch {
+    @dta.InvalidFile(offset~, message~) => {
+      assert_eq(offset, 0L)
+      assert_eq(message, "short strL index read")
+    }
+    e => raise e
+  }
+  let (scratch, _) = test_file()
+  let reader = @dta.open_stream(bytes.length().to_int64(), read, scratch~)
+  let mut called = 0
+  try {
+    reader.export_jsonl(_ => {
+      called += 1
+      fail("sink stopped")
+    })
+    abort("expected sink failure")
+  } catch {
+    e => assert_true(e.to_string().contains("sink stopped"))
+  }
+  assert_eq(called, 1)
+}

@@ -1,5 +1,5 @@
 ///|
-/// Temporary random-access storage for write_jsonl. Reads must return the
+/// Temporary random-access storage for write_jsonl or open_stream. Reads must return the
 /// requested number of bytes, writes must complete or raise. The caller owns
 /// this file and its cleanup. It must be distinct from the source and output.
 pub(all) struct ScratchFile {

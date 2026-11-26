@@ -76,7 +76,7 @@ pub fn Reader::preview(
   }
   let remaining = self.count - offset
   let count = if limit < remaining { limit } else { remaining }
-  let indices = self.indices(columns)
+  let indices = self.metadata.indices(columns)
   let rows = self.decode_rows(offset, count, indices)
   let sets : Map[String, Map[Int, String]] = Map([])
   if labels && count > 0 {
