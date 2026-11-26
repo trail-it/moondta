@@ -1,12 +1,12 @@
 ///|
-extern "js" fn open_input(path : String, limit : Int) -> Int? =
-  #| (path, limit) => {
+extern "js" fn open_input(path : String) -> Int? =
+  #| path => {
   #|   const fs = require('node:fs');
   #|   let fd;
   #|   try {
   #|     fd = fs.openSync(path, fs.constants.O_RDONLY | (fs.constants.O_NONBLOCK || 0));
   #|     const stat = fs.fstatSync(fd);
-  #|     if (stat.isFile() && stat.size <= limit) return fd;
+  #|     if (stat.isFile()) return fd;
   #|   } catch {}
   #|   if (fd !== undefined) { try { fs.closeSync(fd); } catch {} }
   #|   return undefined;
@@ -25,11 +25,9 @@ extern "js" fn read_chunk(fd : Int) -> Bytes? =
 ///|
 priv struct LineSource {
   fd : Int
-  limit : Int
   mut chunk : Bytes
   mut position : Int
-  mut consumed : Int
-  mut line : Int
+  mut line : Int64
   mut eof : Bool
 }
 
@@ -38,7 +36,7 @@ fn LineSource::next_line(self : LineSource) -> String? raise {
   if self.eof {
     return None
   }
-  self.line += 1
+  self.line += 1L
   let mut fragments : @buffer.Buffer? = None
   while true {
     if self.position == self.chunk.length() {
@@ -49,10 +47,6 @@ fn LineSource::next_line(self : LineSource) -> String? raise {
         self.eof = true
         break
       }
-      if next.length() > self.limit - self.consumed {
-        fail("JSONL input exceeds the CLI limit of 512 MiB")
-      }
-      self.consumed += next.length()
       self.chunk = next
       self.position = 0
     }
@@ -61,6 +55,13 @@ fn LineSource::next_line(self : LineSource) -> String? raise {
       self.position += 1
     }
     let part = self.chunk[start:self.position]
+    let buffered = match fragments {
+      Some(buffer) => buffer.length()
+      None => 0
+    }
+    if part.length() > 512 * 1024 * 1024 - buffered {
+      fail("JSONL line \{self.line}: record exceeds the 512 MiB line limit")
+    }
     if self.position < self.chunk.length() {
       self.position += 1
       match fragments {
@@ -93,26 +94,25 @@ fn LineSource::decode_line(
 }
 
 ///|
-fn load_jsonl(path : String) -> @dta.Dataset raise {
-  let limit = 512 * 1024 * 1024
-  guard open_input(path, limit) is Some(fd) else {
-    fail("cannot read regular file (CLI input limit: 512 MiB): \{path}")
+fn with_lines(
+  path : String,
+  use_lines : (LineSource) -> Unit raise,
+) -> Unit raise {
+  guard open_input(path) is Some(fd) else {
+    fail("cannot read regular JSONL file: \{path}")
   }
   let source : LineSource = {
     fd,
-    limit,
     chunk: b"",
     position: 0,
-    consumed: 0,
-    line: 0,
+    line: 0L,
     eof: false,
   }
-  let data = {
+  {
     errdefer ignore(close_file(fd))
-    @dta.from_jsonl(() => source.next_line())
+    use_lines(source)
   }
   if close_file(fd) is Some(message) {
     fail("cannot close input: \{message}")
   }
-  data
 }

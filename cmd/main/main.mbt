@@ -137,12 +137,13 @@ fn run() -> Unit raise {
     options[key] = argv[i + 1]
     i += 2
   }
-  if command == "import" || command == "import-jsonl" {
-    let data = if command == "import-jsonl" {
-      load_jsonl(argv[1])
-    } else {
-      @dta.from_exchange(@json.parse(@utf8.decode(load(argv[1])[:])))
-    }
+  if command == "import-jsonl" {
+    let (version, endian) = format_options(options)
+    import_jsonl(argv[1], argv[2], version?, endian?)
+    return
+  }
+  if command == "import" {
+    let data = @dta.from_exchange(@json.parse(@utf8.decode(load(argv[1])[:])))
     save(argv[2], @dta.encode(change_format(data, options)))
     return
   }
@@ -244,17 +245,30 @@ fn change_format(
   options : Map[String, String],
 ) -> @dta.Dataset raise {
   let s = data.schema
+  let (version, endian) = format_options(options)
+  {
+    schema: {
+      ..s,
+      version: version.unwrap_or(s.version),
+      endian: endian.unwrap_or(s.endian),
+    },
+    rows: data.rows,
+  }
+}
+
+///|
+fn format_options(options : Map[String, String]) -> (Int?, @dta.Endian?) raise {
   let version = match options.get("--version") {
-    Some(v) => number(v)
-    None => s.version
+    Some(v) => Some(number(v))
+    None => None
   }
   let endian = match options.get("--endian") {
-    Some("little") => @dta.Little
-    Some("big") => @dta.Big
-    None => s.endian
+    Some("little") => Some(@dta.Little)
+    Some("big") => Some(@dta.Big)
+    None => None
     _ => fail("endian must be little or big")
   }
-  { schema: { ..s, version, endian, }, rows: data.rows, }
+  (version, endian)
 }
 
 ///|
