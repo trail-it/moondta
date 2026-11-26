@@ -20,12 +20,12 @@ def write_survey(path, count):
         '站牌的字体太小，换乘时看不清楚。',
         '步行过街时间比较短，希望能多给几秒钟。',
     ]
-    with path.open('w', encoding='utf-8', newline='\\n') as stream:
-        stream.write(json.dumps(dict(moondta_jsonl=1, rows=count, schema=schema), ensure_ascii=False) + '\\n')
+    with path.open('w', encoding='utf-8', newline='\n') as stream:
+        stream.write(json.dumps(dict(moondta_jsonl=1, rows=count, schema=schema), ensure_ascii=False) + '\n')
         for i in range(count):
-            memo = f'站点 {i % 512}\\n' + ''.join(observations[(i + j) % 4] for j in range(8))
+            memo = f'站点 {i % 512}\n' + ''.join(observations[(i + j) % 4] for j in range(8))
             row = [{'int': i + 1}, {'text': memo}]
-            stream.write(json.dumps(row, ensure_ascii=False, separators=(',', ':')) + '\\n')
+            stream.write(json.dumps(row, ensure_ascii=False, separators=(',', ':')) + '\n')
 
 
 def main():

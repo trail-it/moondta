@@ -26,10 +26,20 @@ with tempfile.TemporaryDirectory(prefix="moondta-consumer-") as directory:
             assert not any(part in {".git", ".venv", "_build", "node_modules", "generated", "release-local", "__pycache__"}
                            for part in Path(name).parts), name
         package.extractall(library)
+    # Build the packaged CLI before adding the consumer workspace.
+    subprocess.run(["moon", "build", "--target", "js"], cwd=library, check=True)
+    cli = ["node", str(library / "_build/js/debug/build/cmd/main/main.js")]
+    sample = root / "survey.dta"
+    lines = root / "survey.jsonl"
+    restored = root / "restored.dta"
+    subprocess.run([*cli, "import", library / "examples/survey.json", sample], check=True)
+    subprocess.run([*cli, "export-jsonl", sample, lines], check=True)
+    subprocess.run([*cli, "import-jsonl", lines, restored], check=True)
+    assert restored.read_bytes() == sample.read_bytes()
     (root / "moon.work").write_text('members = ["library", "consumer"]\n', encoding="utf-8")
     (consumer / "moon.mod").write_text(f'name = "consumer/check"\nimport {{ "trail-it/moondta@{version}" }}\n', encoding="utf-8")
     (consumer / "moon.pkg").write_text('import { "trail-it/moondta" @dta } for "test"\n', encoding="utf-8")
     (consumer / "consumer_test.mbt").write_text((ROOT / "api_test.mbt").read_text(encoding="utf-8"), encoding="utf-8")
     for target in ("js", "wasm-gc"):
         subprocess.run(["moon", "test", "--target", target, "--package", "consumer/check"], cwd=consumer, check=True)
-    print(f"Actual archive checked: {len(names)} files; independent JS/Wasm GC consumer passed.")
+    print(f"Actual archive checked: {len(names)} files; packaged CLI round trip and independent JS/Wasm GC consumer passed.")

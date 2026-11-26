@@ -101,3 +101,20 @@ python tests/benchmark.py --sizes 8 32 128 --output _build/benchmark.json
 依赖与互操作测试共用 `tests/requirements.txt`。合成输入只保存在被忽略的 `tests/generated/benchmark/`。
 比较旧版本时，在单独目录构建该版本，将 `--cli` 指向其 JS 入口；不要覆盖当前构建。
 此基准独立于 CI 正确性断言，不以机器相关的时间或内存差异判定功能失败。
+
+## 0.3.1 分块导入 JSONL
+
+2026-11-26，在 Linux 7.0.0-44-generic x86_64 与 Node v22.22.1 上比较 0.3.0 和 0.3.1 的 `import-jsonl`。合成问卷有 100,000 行，含整型 ID 和带转义换行的中文 strL 回复，JSONL 共 45,967,757 字节。两版使用同一输入，各自启动独立进程，交替运行顺序，每轮写回的两个 DTA 逐字节相同。
+
+| 版本 | 三轮峰值 RSS（MiB） | 中位数（MiB） | 三轮耗时中位数（秒） |
+|---|---|---:|---:|
+| 0.3.0 | 239.7、240.1、240.3 | 240.1 | 0.577 |
+| 0.3.1 | 188.3、188.1、188.5 | 188.3 | 0.598 |
+
+这份样本的峰值内存中位数下降 21.6%。CLI 以 64 KiB 为单位读入 JSONL，跨块记录在解析前拼合。整个 Dataset、DTA 编码缓冲区和超长单行仍会占用内存。
+
+分别在两个源码版本运行 `moon build --target js`，将产物的路径传入脚本即可复测。
+
+```sh
+python tests/benchmark_jsonl_import.py /path/to/0.3.0/main.js /path/to/0.3.1/main.js --rows 100000 --repeats 3
+```
