@@ -79,3 +79,31 @@ test "JSONL rejects options before emission and propagates sink failures" {
   }
   assert_eq(calls, 2)
 }
+
+///|
+test "JSONL source reconstructs types and rejects missing, excess or ill-formed records" {
+  let data = sample(119, Big)
+  let reader = open(encode(data))
+  let lines = []
+  reader.export_jsonl(line => lines.push(line), batch_size=2)
+  let stream = lines.iter()
+  assert_eq(from_jsonl(() => stream.next()), data)
+  for replacement in ["[]", "{\"int\":1}", "[", ""] {
+    let input = [lines[0], replacement].iter()
+    try {
+      ignore(from_jsonl(() => input.next()))
+      abort("invalid row accepted")
+    } catch {
+      e => assert_true(e.to_string().contains("line 2"))
+    }
+  }
+  for input in [[lines[0]], lines + ["[]"]] {
+    let it = input.iter()
+    try {
+      ignore(from_jsonl(() => it.next()))
+      abort("row count mismatch accepted")
+    } catch {
+      e => assert_true(e.to_string().contains("JSONL line"))
+    }
+  }
+}

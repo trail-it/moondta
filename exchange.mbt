@@ -165,7 +165,13 @@ pub fn from_exchange(json : Json) -> Dataset raise DtaError {
   if wire.moondta_exchange != 1 {
     invalid(0, "unsupported MoonDTA exchange version")
   }
-  let s = wire.schema
+  let schema = parse_wire_schema(wire.schema)
+  let rows = wire.rows.map(row => row.map(value_from_wire))
+  { schema, rows, }
+}
+
+///|
+fn parse_wire_schema(s : WireSchema) -> Schema raise DtaError {
   let schema : Schema = {
     version: s.version,
     endian: s.endian,
@@ -181,31 +187,82 @@ pub fn from_exchange(json : Json) -> Dataset raise DtaError {
     }),
   }
   validate_schema(schema)
-  let rows = wire.rows.map(row => {
-    row.map(j => {
-      guard j is Object(obj) && obj.length() == 1 else {
-        raise Invalid(
-          offset=0,
-          message="exchange cell must have exactly one type key",
-        )
+  schema
+}
+
+///|
+fn value_from_wire(j : Json) -> Value raise DtaError {
+  guard j is Object(obj) && obj.length() == 1 else {
+    raise Invalid(
+      offset=0,
+      message="exchange cell must have exactly one type key",
+    )
+  }
+  match j {
+    { "int": v, .. } => Integer(exact_int(v))
+    { "number_bits": String(s), .. } =>
+      Number(parse_bits(s).reinterpret_as_double())
+    { "text": String(s), .. } => Text(s)
+    { "binary": Array(bytes), .. } =>
+      Binary(bytes_from_ints(bytes.map(exact_int)))
+    { "missing": m, .. } => {
+      let tag = exact_int(m)
+      if tag < 0 || tag > 26 {
+        invalid(0, "missing tag must be 0..26")
       }
-      match j {
-        { "int": v, .. } => Integer(exact_int(v))
-        { "number_bits": String(s), .. } =>
-          Number(parse_bits(s).reinterpret_as_double())
-        { "text": String(s), .. } => Text(s)
-        { "binary": Array(bytes), .. } =>
-          Binary(bytes_from_ints(bytes.map(exact_int)))
-        { "missing": m, .. } => {
-          let tag = exact_int(m)
-          if tag < 0 || tag > 26 {
-            invalid(0, "missing tag must be 0..26")
-          }
-          Missing(tag)
-        }
-        _ => raise Invalid(offset=0, message="invalid exchange cell")
+      Missing(tag)
+    }
+    _ => raise Invalid(offset=0, message="invalid exchange cell")
+  }
+}
+
+///|
+/// Read exchange lines from a source. The first line supplies the projected schema
+/// and row count. One array follows per row. The returned dataset retains its rows;
+/// encode checks representability in the declared DTA storage types.
+pub fn from_jsonl(next_line : () -> String? raise) -> Dataset raise {
+  guard next_line() is Some(first) else { fail("JSONL line 1: missing header") }
+  let (schema, count) = try {
+    guard @json.parse(first)
+      is { "moondta_jsonl": version, "rows": size, "schema": raw, .. } else {
+      fail("expected header with moondta_jsonl, rows and schema")
+    }
+    if exact_int(version) != 1 {
+      fail("unsupported JSONL version")
+    }
+    let count = exact_int(size)
+    if count < 0 {
+      fail("negative row count")
+    }
+    let schema = parse_wire_schema(@json.from_json(raw))
+    if count > 0 && schema.columns.is_empty() {
+      fail("rows require columns")
+    }
+    (schema, count)
+  } catch {
+    e => fail("JSONL line 1: \{e}")
+  }
+  let rows = []
+  for i in 0..<count {
+    let n = i.to_int64() + 2L
+    guard next_line() is Some(line) else {
+      fail("JSONL line \{n}: expected a row, found EOF")
+    }
+    let row = try {
+      guard @json.parse(line) is Array(cells) else {
+        fail("expected a row array")
       }
-    })
-  })
+      if cells.length() != schema.columns.length() {
+        fail("row width differs from schema")
+      }
+      cells.map(value_from_wire)
+    } catch {
+      e => fail("JSONL line \{n}: \{e}")
+    }
+    rows.push(row)
+  }
+  if next_line() is Some(_) {
+    fail("JSONL line \{count.to_int64() + 2L}: extra record")
+  }
   { schema, rows, }
 }

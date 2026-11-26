@@ -11,6 +11,8 @@ pub fn encode(Dataset) -> Bytes raise DtaError
 
 pub fn from_exchange(Json) -> Dataset raise DtaError
 
+pub fn from_jsonl(() -> String? raise) -> Dataset raise
+
 pub fn open(Bytes) -> Reader raise DtaError
 
 // Errors
