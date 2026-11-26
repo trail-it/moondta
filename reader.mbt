@@ -270,6 +270,31 @@ pub fn Reader::row_count(self : Reader) -> Int {
 }
 
 ///|
+/// Number of variables, without copying metadata.
+pub fn Reader::column_count(self : Reader) -> Int {
+  self.metadata.columns.length()
+}
+
+///|
+/// Resolve exact variable names into zero-based indices in caller order.
+pub fn Reader::column_indices(
+  self : Reader,
+  names : Array[String],
+) -> Array[Int] raise DtaError {
+  let lookup : Map[String, Int] = Map([])
+  for i, col in self.metadata.columns {
+    lookup[col.name] = i
+  }
+  names.map(name => {
+    guard lookup.get(name) is Some(i) else {
+      raise Invalid(offset=0, message="unknown or duplicate variable: \{name}")
+    }
+    lookup.remove(name)
+    i
+  })
+}
+
+///|
 fn Reader::read_strl(
   self : Reader,
   object : StrLObject,

@@ -167,7 +167,7 @@ fn run() -> Unit raise {
     }
     reader.verify(batch_size=batch)
     println(
-      "Verified \{reader.row_count()} rows, \{reader.schema().columns.length()} variables",
+      "Verified \{reader.row_count()} rows, \{reader.column_count()} variables",
     )
     return
   }
@@ -176,27 +176,15 @@ fn run() -> Unit raise {
     return
   }
   let columns = match options.get("--columns") {
-    Some(list) => {
-      let schema = reader.schema()
-      let lookup : Map[String, Int] = Map([])
-      for i, col in schema.columns {
-        lookup[col.name] = i
-      }
-      list
-      .split(",")
-      .collect()
-      .map(name => {
-        guard lookup.get(name.to_owned()) is Some(i) else {
-          fail("unknown variable: \{name}")
-        }
-        i
-      })
-    }
+    Some(list) =>
+      reader.column_indices(
+        list.split(",").map(name => name.to_owned()).collect(),
+      )
     None => {
       if command == "select" {
         fail("select requires --columns")
       }
-      Array::makei(reader.schema().columns.length(), i => i)
+      Array::makei(reader.column_count(), i => i)
     }
   }
   let offset = number(options.get("--offset").unwrap_or("0"))

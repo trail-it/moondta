@@ -58,6 +58,8 @@ pub(all) struct LabelSet {
 pub struct Reader {
   // private fields
 }
+pub fn Reader::column_count(Self) -> Int
+pub fn Reader::column_indices(Self, Array[String]) -> Array[Int] raise DtaError
 pub fn Reader::describe(Self) -> String
 pub fn Reader::export_jsonl(Self, (String) -> Unit raise, offset? : Int, limit? : Int, columns? : Array[Int], batch_size? : Int) -> Unit raise
 pub fn Reader::inspect_json(Self) -> Json
