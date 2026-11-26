@@ -59,6 +59,7 @@ pub struct Reader {
   // private fields
 }
 pub fn Reader::describe(Self) -> String
+pub fn Reader::export_jsonl(Self, (String) -> Unit raise, offset? : Int, limit? : Int, columns? : Array[Int], batch_size? : Int) -> Unit raise
 pub fn Reader::inspect_json(Self) -> Json
 pub fn Reader::preview(Self, offset? : Int, limit? : Int, columns? : Array[Int], max_chars? : Int, labels? : Bool) -> String raise DtaError
 pub fn Reader::read(Self) -> Dataset raise DtaError

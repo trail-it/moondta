@@ -69,6 +69,27 @@
 
 ## 复现
 
+### 2026-11-26 分批 JSONL 导出
+
+Windows / Node v24.19.0 / moonc v0.10.13+cbb11c36f，输入复用 `numeric-200000.dta`，
+200,000 行、8 个 double 列，12.21 MiB。每种命令单独启动进程，单次观测。
+
+| 导出方式 | 峰值 MiB | 秒 | 输出字节 |
+|---|---:|---:|---:|
+| `export` 单文档缩进 JSON | 1685.3 | 5.562 | 96,801,402 |
+| `export-jsonl --batch-size 256` | 123.5 | 2.543 | 56,400,820 |
+
+JSONL 逐批解码、逐行写出，峰值内存下降约 92.7%。两者缩进不同，输出大小及耗时也受格式影响。
+JSONL 的输入 DTA 字节仍在内存中，解码批次大小和单条内容大小影响峰值。
+测量使用相同 `tests/measure.cjs` 包装器，可将下方命令的输入替换为自己的路径。
+
+```sh
+node tests/measure.cjs _build/js/debug/build/cmd/main/main.js _build/json-metrics.json export tests/generated/benchmark/numeric-200000.dta _build/result.json
+node tests/measure.cjs _build/js/debug/build/cmd/main/main.js _build/jsonl-metrics.json export-jsonl tests/generated/benchmark/numeric-200000.dta _build/result.jsonl --batch-size 256
+```
+
+### 原有容量场景
+
 ```sh
 moon build --target js
 python tests/benchmark.py --sizes 8 32 128 --output _build/benchmark.json

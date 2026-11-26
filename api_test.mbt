@@ -24,4 +24,7 @@ test "public library example" {
     [@dta.Missing(1)],
   ])
   assert_eq(@dta.encode(@dta.from_exchange(dataset.to_exchange())), bytes)
+  let lines : Array[String] = []
+  reader.export_jsonl(line => lines.push(line), batch_size=1)
+  assert_eq(lines.length(), 3)
 }

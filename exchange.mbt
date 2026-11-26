@@ -59,20 +59,72 @@ pub fn Dataset::to_exchange(self : Dataset) -> Json {
   let wire : WireDataset = {
     moondta_exchange: 1,
     schema: wire_schema(self.schema),
-    rows: self.rows.map(row => {
-      row.map(v => {
-        match v {
-          Integer(n) => { "int": n }
-          Number(n) =>
-            { "number_bits": n.reinterpret_as_uint64().to_string(radix=16) }
-          Text(t) => { "text": t }
-          Binary(b) => { "binary": b.to_array().map(x => x.to_int()).to_json() }
-          Missing(m) => { "missing": m }
-        }
-      })
-    }),
+    rows: self.rows.map(row => row.map(value_to_wire)),
   }
   ToJson::to_json(wire)
+}
+
+///|
+fn value_to_wire(value : Value) -> Json {
+  match value {
+    Integer(n) => { "int": n }
+    Number(n) =>
+      { "number_bits": n.reinterpret_as_uint64().to_string(radix=16) }
+    Text(t) => { "text": t }
+    Binary(b) => { "binary": b.to_array().map(x => x.to_int()).to_json() }
+    Missing(m) => { "missing": m }
+  }
+}
+
+///|
+/// Emit a metadata header followed by one typed row per line, including LF.
+/// Decoded rows are retained only for the current batch. Input bytes stay in memory.
+/// Sink and decoding errors propagate immediately; the sink owns partial-output cleanup.
+pub fn Reader::export_jsonl(
+  self : Reader,
+  write : (String) -> Unit raise,
+  offset? : Int = 0,
+  limit? : Int = self.count - offset,
+  columns? : Array[Int],
+  batch_size? : Int = 256,
+) -> Unit raise {
+  if offset < 0 ||
+    offset > self.count ||
+    limit < 0 ||
+    limit > self.count - offset {
+    invalid(0, "row range outside dataset")
+  }
+  if batch_size < 1 {
+    invalid(0, "batch size must be positive")
+  }
+  let indices = self.indices(columns)
+  if indices.is_empty() && limit > 0 {
+    invalid(0, "cannot select zero variables from nonempty rows")
+  }
+  let schema = self.select(indices, offset~, limit=0).schema
+  let header : Json = {
+    "moondta_jsonl": 1,
+    "rows": limit,
+    "schema": ToJson::to_json(wire_schema(schema)),
+  }
+  write(header.stringify() + "\n")
+  let mut done = 0
+  while done < limit {
+    let count = if batch_size < limit - done {
+      batch_size
+    } else {
+      limit - done
+    }
+    let rows = self.read_rows(
+      offset=offset + done,
+      limit=count,
+      columns=indices,
+    )
+    for row in rows {
+      write(row.map(value_to_wire).to_json().stringify() + "\n")
+    }
+    done += count
+  }
 }
 
 ///|

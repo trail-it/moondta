@@ -17,6 +17,22 @@ extern "js" fn report_error(message : String) -> Unit =
   #| (message) => { process.stderr.write(message + '\n'); process.exitCode = 1; }
 
 ///|
+extern "js" fn create_output(path : String) -> Int? =
+  #| (path) => { try { return require('node:fs').openSync(path, 'wx'); } catch { return undefined; } }
+
+///|
+extern "js" fn write_line(fd : Int, line : String) -> String? =
+  #| (fd, line) => { try { require('node:fs').writeFileSync(fd, line, 'utf8'); return undefined; } catch (e) { return e.message; } }
+
+///|
+extern "js" fn close_output(fd : Int) -> String? =
+  #| (fd) => { try { require('node:fs').closeSync(fd); return undefined; } catch (e) { return e.message; } }
+
+///|
+extern "js" fn discard_output(fd : Int, path : String) -> Unit =
+  #| (fd, path) => { const fs = require('node:fs'); try { fs.closeSync(fd); } catch {} try { fs.unlinkSync(path); } catch {} }
+
+///|
 fn load(path : String) -> Bytes raise {
   guard read_file(path) is Some(bytes) else {
     fail("cannot read regular file (CLI input limit: 512 MiB): \{path}")
@@ -59,6 +75,7 @@ fn help() -> Unit {
       #|  preview INPUT.dta [--columns a,b] [--offset N] [--limit N] [--width N] [--labels on|off]
       #|  verify INPUT.dta [--batch-size N]
       #|  export INPUT.dta OUTPUT.json [--columns a,b] [--offset N] [--limit N]
+      #|  export-jsonl INPUT.dta OUTPUT.jsonl [--columns a,b] [--offset N] [--limit N] [--batch-size N]
       #|  import INPUT.json OUTPUT.dta [--version 118|119] [--endian little|big]
       #|  convert INPUT.dta OUTPUT.dta [--version 118|119] [--endian little|big]
       #|  select INPUT.dta OUTPUT.dta --columns a,b [--offset N] [--limit N]
@@ -98,6 +115,11 @@ fn run() -> Unit raise {
       "verify" => key == "--batch-size"
       "export" | "select" =>
         key == "--columns" || key == "--offset" || key == "--limit"
+      "export-jsonl" =>
+        key == "--columns" ||
+        key == "--offset" ||
+        key == "--limit" ||
+        key == "--batch-size"
       "preview" =>
         key == "--columns" ||
         key == "--offset" ||
@@ -122,6 +144,7 @@ fn run() -> Unit raise {
   if command != "inspect" &&
     command != "verify" &&
     command != "export" &&
+    command != "export-jsonl" &&
     command != "select" &&
     command != "preview" &&
     command != "describe" &&
@@ -180,6 +203,28 @@ fn run() -> Unit raise {
   let limit = match options.get("--limit") {
     Some(s) => number(s)
     None => if command == "preview" { 10 } else { reader.row_count() - offset }
+  }
+  if command == "export-jsonl" {
+    let batch = number(options.get("--batch-size").unwrap_or("256"))
+    guard create_output(argv[2]) is Some(fd) else {
+      fail("cannot create output: \{argv[2]}")
+    }
+    errdefer discard_output(fd, argv[2])
+    reader.export_jsonl(
+      line => {
+        if write_line(fd, line) is Some(message) {
+          fail("cannot write output: \{message}")
+        }
+      },
+      offset~,
+      limit~,
+      columns~,
+      batch_size=batch,
+    )
+    if close_output(fd) is Some(message) {
+      fail("cannot close output: \{message}")
+    }
+    return
   }
   if command == "preview" {
     let width = number(options.get("--width").unwrap_or("60"))
