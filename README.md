@@ -3,7 +3,7 @@
 用 MoonBit 读取、检查和生成 **Stata DTA 118/119** 文件，面向问卷、社会科学及统计数据交换。
 核心解析与编码不依赖 Python、Stata 或 ReadStat；Node.js 仅为命令行提供文件读写。
 
-Mooncakes 模块名为 `trail-it/moondta`，本页对应版本 `0.3.0`。
+Mooncakes 模块名为 `trail-it/moondta`，本页对应版本 `0.3.1`。
 
 ## 已实现
 
@@ -93,14 +93,14 @@ with open("_build/survey.jsonl", encoding="utf-8") as stream:
 
 `import-jsonl` 接受 LF、CRLF 及没有末尾换行的 UTF-8 文件。文件头声明行数，每条记录的单元格数必须与列数一致。遇到截断、额外记录、无效 UTF-8 或错误的单元格标记，会报告行号。默认保留源版本及字节序，写入时可用 `--version` 和 `--endian` 指定目标格式。
 
-库调用者可用 `@dta.from_jsonl(next_line)` 从回调逐行提供文本，以 `None` 表示输入结束。返回的 Dataset 保留全部数据行，CLI 导入时也会保留输入文件字节。单文档 JSON 对应 `export` 和 `import`。
+库调用者可用 `@dta.from_jsonl(next_line)` 从回调逐行提供文本，以 `None` 表示输入结束。CLI 按 64 KiB 分块读取文件，跨块记录在解析前拼合，输入上限为 512 MiB。返回的 Dataset 仍保留全部数据行，生成 DTA 时还会分配编码缓冲区。单文档 JSON 对应 `export` 和 `import`。
 
 ### 安装已发布库
 
 在自己的 MoonBit 工程里添加依赖，再在包配置中设置别名。
 
 ```sh
-moon add trail-it/moondta@0.3.0
+moon add trail-it/moondta@0.3.1
 ```
 
 ```moonbit

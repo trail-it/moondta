@@ -173,7 +173,11 @@ test "reader metadata copies do not invalidate row decoding" {
 
 ///|
 test "exchange rejects fractional integer cells, missing tags and binary octets" {
-  let wire = sample(118, Little).to_exchange()
+  let data : Dataset = {
+    schema: Schema::new([Column::new("n", Int32)]),
+    rows: [],
+  }
+  let wire = data.to_exchange()
   guard wire is Object(fields) else { abort("expected object") }
   for
     cell in (

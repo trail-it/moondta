@@ -1,12 +1,14 @@
 """Build and use the actual local package archive from an isolated consumer."""
 from pathlib import Path
+import re
 import subprocess
 import tempfile
 from zipfile import ZipFile
 
 ROOT = Path(__file__).resolve().parents[1]
 subprocess.run(["moon", "package"], cwd=ROOT, check=True)
-archive = ROOT / "_build/publish/trail-it-moondta-0.3.0.zip"
+version = re.search(r'^version\s*=\s*"([^"]+)"', (ROOT / "moon.mod").read_text(encoding="utf-8"), re.M)[1]
+archive = ROOT / f"_build/publish/trail-it-moondta-{version}.zip"
 
 with tempfile.TemporaryDirectory(prefix="moondta-consumer-") as directory:
     root = Path(directory).resolve()
@@ -25,7 +27,7 @@ with tempfile.TemporaryDirectory(prefix="moondta-consumer-") as directory:
                            for part in Path(name).parts), name
         package.extractall(library)
     (root / "moon.work").write_text('members = ["library", "consumer"]\n', encoding="utf-8")
-    (consumer / "moon.mod").write_text('name = "consumer/check"\nimport { "trail-it/moondta@0.3.0" }\n', encoding="utf-8")
+    (consumer / "moon.mod").write_text(f'name = "consumer/check"\nimport {{ "trail-it/moondta@{version}" }}\n', encoding="utf-8")
     (consumer / "moon.pkg").write_text('import { "trail-it/moondta" @dta } for "test"\n', encoding="utf-8")
     (consumer / "consumer_test.mbt").write_text((ROOT / "api_test.mbt").read_text(encoding="utf-8"), encoding="utf-8")
     for target in ("js", "wasm-gc"):
