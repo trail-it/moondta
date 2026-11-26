@@ -140,3 +140,22 @@ python tests/benchmark_jsonl_import.py /path/to/0.3.1/main.js /path/to/0.4.0/mai
 python tests/benchmark_jsonl_import.py /path/to/0.3.1/main.js /path/to/0.4.0/main.js --rows 100000 --repeats 3 --unique
 python tests/large_jsonl.py --rows 1100000 --heap-mib 64
 ```
+
+## 0.5.0 从磁盘校验和导出 DTA
+
+2026-11-26 在 Linux 7.0.0-44-generic x86_64、Node v22.22.1 上，用 0.4.0 重新生成了上一节的 119 大端问卷。文件大小为 2,911,691,399 字节（2.71 GiB），含 110 万行、一个 str2045 定长列和 110 万个唯一中文长字符串。源文件、临时索引和输出均在磁盘文件系统上。
+
+| 命令 | 完成内容 | 耗时（秒） | 峰值 RSS（MiB） |
+|---|---|---:|---:|
+| `verify` | 校验全部单元格、文本对象及其引用 | 7.33 | 125.5 |
+| `export-jsonl` | 全列导出 1,100,000 行，共 673,178,261 字节 | 12.42 | 133.0 |
+
+表中是同一轮验收的两个独立进程，V8 老生代堆上限均为 64 MiB。耗时包含建索引，RSS 包含整个 Node 进程。索引每个长对象使用 32 字节，这份文件共需 35,200,000 字节临时空间。导出完成后逐行核对原始 JSONL 的表结构、类型和内容，再从最后三行逆序选取两列，校验列名、排序列编号及值。表中耗时仅覆盖对应的 CLI 命令。
+
+以下命令可重建样本并运行上述校验。已有同一组问卷文件时，可复用它们。
+
+```sh
+moon build --target js
+python tests/large_dta_read.py --rows 1100000 --heap-mib 64
+python tests/large_dta_read.py --dta /path/to/survey.dta --expected /path/to/survey.jsonl
+```

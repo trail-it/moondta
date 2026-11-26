@@ -3,7 +3,7 @@
 用 MoonBit 读取、检查和生成 **Stata DTA 118/119** 文件，面向问卷、社会科学及统计数据交换。
 核心解析与编码不依赖 Python、Stata 或 ReadStat；Node.js 仅为命令行提供文件读写。
 
-Mooncakes 模块名为 `trail-it/moondta`，本页对应版本 `0.4.0`。
+Mooncakes 模块名为 `trail-it/moondta`，本页对应版本 `0.5.0`。
 
 ## 已实现
 
@@ -15,10 +15,10 @@ Mooncakes 模块名为 `trail-it/moondta`，本页对应版本 `0.4.0`。
 | 字符串 | UTF-8 str1–str2045、文本 strL、二进制 strL |
 | 元数据 | 数据集标签、变量标签、取值标签（包括缺失值标签）、显示格式、时间戳、排序列 |
 | characteristics | 保留变量/数据集属性及原始 payload，包含 notes 和语言属性 |
-| 读取 | 打开时解析元数据和 strL 位置索引，按指定行区间与列编号解码；strL 按需解码，批次内复用共享对象 |
+| 读取 | 支持内存和磁盘两种读取方式，按行区间和列顺序解码，长字符串按引用定位 |
 | 预览 | 可读的数据表及数据字典，展示普通数值、负零、标签和扩展缺失值 |
 | 交换 | 带类型及元数据的 JSON 和 JSON Lines 双向交换，浮点位模式保留负零 |
-| 错误 | 有界读取、map/长度/UTF-8/引用检查，返回带字节位置的 `DtaError` |
+| 错误 | 检查 map、长度、UTF-8 和引用，流式读取错误可报告 64 位文件位置 |
 
 日期和时间保留为 **数值 + Stata 显示格式**（例如 `%td`），不转换时区或解释统计语义。
 
@@ -74,11 +74,18 @@ node _build/js/debug/build/cmd/main/main.js import-jsonl _build/survey.jsonl _bu
 其后每行是一个使用现有类型标记的单元格数组，字符串中的换行按 JSON 转义。
 空结果只包含头行。格式使用 UTF-8，每行以 LF 结尾。
 
-核心 API `reader.export_jsonl(write, offset?, limit?, columns?, batch_size?)` 将每个完整行字符串
-交给 `write` 回调，字符串包含结尾 LF。默认每批解码 256 行，仅保留当前批次和当前输出行。
-回调错误与解码错误立即传给调用者，库的调用者负责处置部分输出。
-CLI 独占创建输出文件，失败时清理本次创建的文件。已有文件保留。
-输入 DTA 字节仍驻留内存，单条超长文本或二进制也会影响峰值内存。
+从 0.5.0 起，`verify` 和 `export-jsonl` 按文件位置读取 DTA，每次最多 64 KiB。`verify` 扫描所有单元格，并分块校验每个文本 strL，包括未被引用的对象。`export-jsonl` 按所选列和行范围解码，每次写出一条完整记录。两者均可直接打开超过 2 GiB 的文件。
+
+库调用 `@dta.open_stream(length, read_at, scratch~)` 打开同样的读取器。`length`  是文件字节数，`read_at` 接受零起始的字节位置，两者均为 `Int64`。输入在读取期间必须稳定，回调须读满请求的字节数。每个读取器使用独立的 `ScratchFile` 保存长对象的位置，每个对象占 32 字节。CLI 按需在系统临时目录创建索引，正常退出及读写失败时都清理。Linux 上可用 `TMPDIR` 指定临时盘。内存主要用于表结构、固定容量缓冲和导出的最大单行。
+
+```moonbit
+let reader = @dta.open_stream(file_length, read_at, scratch~)
+reader.verify()
+let columns = reader.column_indices(["备注", "id"])
+reader.export_jsonl(write_line, columns~, offset=1, limit=2)
+```
+
+`write_line` 接收带 LF 的完整行。库调用者负责释放输入、临时存储和处理部分输出。CLI 独占创建输出文件，失败时清理本次创建的文件。`@dta.open(bytes)` 仍可用于已在内存中的数据。
 
 Python 消费示例逐行保留类型标记，适合接入自己的数据处理流程。
 
@@ -104,7 +111,7 @@ with open("_build/survey.jsonl", encoding="utf-8") as stream:
 在自己的 MoonBit 工程里添加依赖，再在包配置中设置别名。
 
 ```sh
-moon add trail-it/moondta@0.4.0
+moon add trail-it/moondta@0.5.0
 ```
 
 ```moonbit
@@ -192,6 +199,8 @@ python tests/interop.py
 python tests/compat_interop.py
 python tests/jsonl_interop.py
 python tests/streaming_import.py
+python tests/streaming_read.py
+python tests/large_dta_read.py --rows 3500
 python tests/wide.py
 python tests/package_consumer.py
 # 可选：下载 Stata Press 示例（保存在被忽略的 tests/generated/）
@@ -216,7 +225,7 @@ python tests/benchmark.py --sizes 8 32 128 --output _build/benchmark.json
 
 - 仅支持 118/119；114/117、SAS/SPSS、统计运算、Stata 命令解释器不在范围内。
 - `open` 在内存中持有 DTA 字节和 strL 位置索引，分批读取减少已解码行的内存。`encode(Dataset)`、完整转换和单文档 JSON 交换在内存中完成。
-- `import-jsonl` 使用 64 位输出偏移，JSONL 头中声明的行数上限为 2,147,483,647。其他 CLI 命令仍限制单个输入文件为 512 MiB，内存版 Reader 使用有符号 32 位索引。118 限 32,767 列，119 限 120,000 列。
+- `import-jsonl`、`verify` 和 `export-jsonl` 使用 64 位文件偏移，行数上限为 2,147,483,647。Node CLI 的随机访问偏移上限为 2⁵³−1 字节。其他 CLI 命令的单个输入文件上限为 512 MiB。118 限 32,767 列，119 限 120,000 列。
 - 保留语义，不承诺文件字节完全相同：写出会重建 map、strL 引用和标签布局；未引用的 strL 对象、
   字段填充字节、EOF 后的换行不作为数据保存。可接受 EOF 后单个 LF 或 CRLF，其余尾随内容报错。
 - 保留自定义显示格式和 characteristics，但不执行格式、不解释应用私有属性。
