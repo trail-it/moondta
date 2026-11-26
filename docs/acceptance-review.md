@@ -46,11 +46,14 @@ skill 保存的“至少 10 个有效 commits”来自其他项目的用户材�
 | 类型与失败路径 | 负零、缺失值、标签、二进制、中文及换行，目标已存在、迟发解码错误和注入写入错误后的清理均通过 |
 | 既有交换行为 | `tests/interop.py` 与 `tests/compat_interop.py` 回归通过 |
 | 归档可用性 | 实际 0.3.0 zip 从独立工程编译并调用新增公开 API，排除本地缓存与数据 |
+| 本次 Linux 实机 | 2026-11-26，Linux 7.0.0-44-generic x86_64，独立临时目录，项目锁定工具链、Node v22.22.1、Python 3.14.4；格式、双后端检查、各 19 个测试、JSONL 与既有互操作脚本、实际包消费均通过 |
+| 0.3.0 功能提交 | [d67868b](https://github.com/trail-it/moondta/commit/d67868b)，[对应双平台 CI](https://github.com/trail-it/moondta/actions/runs/45756476645) |
 
 性能比较使用同一份 200,000 行、8 个 double 列的合成 DTA（约 12.21 MiB），
 每个命令单独启动 Node 进程，默认 JSONL 批次 256。
 单次观测中普通 JSON 导出峰值约 1,685 MiB，JSONL 约 123 MiB，下降约 92.7%。
 普通 JSON 带缩进、JSONL 紧凑写行，耗时和输出体积也受格式影响，详见 [性能记录](benchmarks.md)。
+同一输入在 Linux 实机复测，普通 JSON 峰值 1,626.8 MiB，JSONL 115.9 MiB，单次观测下降约 92.9%。
 
 ## 三个完整使用流程
 
