@@ -147,10 +147,25 @@ fn run() -> Unit raise {
     save(argv[2], @dta.encode(change_format(data, options)))
     return
   }
+  if command == "verify" || command == "export-jsonl" {
+    let batch = number(options.get("--batch-size").unwrap_or("256"))
+    if batch < 1 {
+      fail("batch size must be positive")
+    }
+    if command == "verify" {
+      with_disk_reader(argv[1], reader => {
+        reader.verify(batch_size=batch)
+        println(
+          "Verified \{reader.row_count()} rows, \{reader.column_count()} variables",
+        )
+      })
+    } else {
+      export_disk_jsonl(argv[1], argv[2], options, batch)
+    }
+    return
+  }
   if command != "inspect" &&
-    command != "verify" &&
     command != "export" &&
-    command != "export-jsonl" &&
     command != "select" &&
     command != "preview" &&
     command != "describe" &&
@@ -166,26 +181,12 @@ fn run() -> Unit raise {
     println(reader.describe())
     return
   }
-  if command == "verify" {
-    let batch = number(options.get("--batch-size").unwrap_or("256"))
-    if batch < 1 {
-      fail("batch size must be positive")
-    }
-    reader.verify(batch_size=batch)
-    println(
-      "Verified \{reader.row_count()} rows, \{reader.column_count()} variables",
-    )
-    return
-  }
   if command == "convert" {
     save(argv[2], @dta.encode(change_format(reader.read(), options)))
     return
   }
-  let columns = match options.get("--columns") {
-    Some(list) =>
-      reader.column_indices(
-        list.split(",").map(name => name.to_owned()).collect(),
-      )
+  let columns = match column_names(options) {
+    Some(names) => reader.column_indices(names)
     None => {
       if command == "select" {
         fail("select requires --columns")
@@ -197,28 +198,6 @@ fn run() -> Unit raise {
   let limit = match options.get("--limit") {
     Some(s) => number(s)
     None => if command == "preview" { 10 } else { reader.row_count() - offset }
-  }
-  if command == "export-jsonl" {
-    let batch = number(options.get("--batch-size").unwrap_or("256"))
-    guard create_output(argv[2]) is Some(fd) else {
-      fail("cannot create output: \{argv[2]}")
-    }
-    errdefer discard_output(fd, argv[2])
-    reader.export_jsonl(
-      line => {
-        if write_line(fd, line) is Some(message) {
-          fail("cannot write output: \{message}")
-        }
-      },
-      offset~,
-      limit~,
-      columns~,
-      batch_size=batch,
-    )
-    if close_file(fd) is Some(message) {
-      fail("cannot close output: \{message}")
-    }
-    return
   }
   if command == "preview" {
     let width = number(options.get("--width").unwrap_or("60"))
@@ -237,6 +216,13 @@ fn run() -> Unit raise {
     @dta.encode(data)
   }
   save(argv[2], bytes)
+}
+
+///|
+fn column_names(options : Map[String, String]) -> Array[String]? {
+  options
+  .get("--columns")
+  .map(list => list.split(",").map(name => name.to_owned()).collect())
 }
 
 ///|
@@ -274,6 +260,8 @@ fn format_options(options : Map[String, String]) -> (Int?, @dta.Endian?) raise {
 ///|
 fn main {
   run() catch {
+    @dta.InvalidFile(offset~, message~) =>
+      report_error("MoonDTA: byte \{offset}: \{message}")
     @dta.Invalid(offset~, message~) =>
       report_error("MoonDTA: byte \{offset}: \{message}")
     e => report_error("MoonDTA: \{e}")
