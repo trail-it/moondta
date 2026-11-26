@@ -29,4 +29,21 @@ test "public library example" {
   let lines : Array[String] = []
   reader.export_jsonl(line => lines.push(line), batch_size=1)
   assert_eq(lines.length(), 3)
+  let input = lines.iter()
+  assert_eq(@dta.encode(@dta.from_jsonl(() => input.next())), bytes)
+  let selected = reader.column_indices(["备注"])
+  let offsets = []
+  let values = []
+  reader.each_batch(
+    (start, batch) => {
+      offsets.push(start)
+      for row in batch {
+        values.push(row[0])
+      }
+    },
+    columns=selected,
+    batch_size=1,
+  )
+  assert_eq(offsets, [0, 1])
+  assert_eq(values, [@dta.Text("中文😀"), @dta.Text("")])
 }

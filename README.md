@@ -3,7 +3,7 @@
 用 MoonBit 读取、检查和生成 **Stata DTA 118/119** 文件，面向问卷、社会科学及统计数据交换。
 核心解析与编码不依赖 Python、Stata 或 ReadStat；Node.js 仅为命令行提供文件读写。
 
-模块名为 `trail-it/moondta`。当前源码为 `0.3.0` 开发版，Mooncakes 已发布版本为 `0.2.0`。
+Mooncakes 模块名为 `trail-it/moondta`，本页对应版本 `0.3.0`。
 
 ## 已实现
 
@@ -17,7 +17,7 @@
 | characteristics | 保留变量/数据集属性及原始 payload，包含 notes 和语言属性 |
 | 读取 | 打开时解析元数据和 strL 位置索引，按指定行区间与列编号解码；strL 按需解码，批次内复用共享对象 |
 | 预览 | 可读的数据表及数据字典，展示普通数值、负零、标签和扩展缺失值 |
-| 交换 | 带类型及元数据的版本化 JSON；浮点位模式保留负零 |
+| 交换 | 带类型及元数据的 JSON 和 JSON Lines 双向交换，浮点位模式保留负零 |
 | 错误 | 有界读取、map/长度/UTF-8/引用检查，返回带字节位置的 `DtaError` |
 
 日期和时间保留为 **数值 + Stata 显示格式**（例如 `%td`），不转换时区或解释统计语义。
@@ -60,12 +60,13 @@ node _build/js/debug/build/cmd/main/main.js export _build/survey119.dta _build/r
 
 ## 库 API
 
-### 0.3.0 逐批 JSON Lines 导出
+### 用 JSON Lines 往返交换 DTA
 
 从当前源码构建 CLI 后运行。
 
 ```sh
 node _build/js/debug/build/cmd/main/main.js export-jsonl _build/survey.dta _build/survey.jsonl --batch-size 256
+node _build/js/debug/build/cmd/main/main.js import-jsonl _build/survey.jsonl _build/from-lines.dta --version 119 --endian big
 ```
 
 支持 `--columns`、`--offset`、`--limit`，行范围遵循 `export` 的边界检查。
@@ -90,14 +91,16 @@ with open("_build/survey.jsonl", encoding="utf-8") as stream:
         print(row)
 ```
 
-JSONL 导出格式与单文档 JSON 交换格式分别标记版本。现有 `import` 接受单文档 JSON 交换。
+`import-jsonl` 接受 LF、CRLF 及没有末尾换行的 UTF-8 文件。文件头声明行数，每条记录的单元格数必须与列数一致。遇到截断、额外记录、无效 UTF-8 或错误的单元格标记，会报告行号。默认保留源版本及字节序，写入时可用 `--version` 和 `--endian` 指定目标格式。
+
+库调用者可用 `@dta.from_jsonl(next_line)` 从回调逐行提供文本，以 `None` 表示输入结束。返回的 Dataset 保留全部数据行，CLI 导入时也会保留输入文件字节。单文档 JSON 对应 `export` 和 `import`。
 
 ### 安装已发布库
 
 在自己的 MoonBit 工程里添加依赖，再在包配置中设置别名。
 
 ```sh
-moon add trail-it/moondta@0.2.0
+moon add trail-it/moondta@0.3.0
 ```
 
 ```moonbit
@@ -125,12 +128,18 @@ let bytes = @dta.encode(dataset)
 let reader = @dta.open(bytes)
 let batch = reader.read_rows(offset=1, limit=1, columns=[0])
 // batch == [[Missing(1)]]，即 .a
+let selected = reader.column_indices(["备注"])
+reader.each_batch((start, rows) => {
+  println("从第 \{start} 行起处理 \{rows.length()} 行")
+}, columns=selected, batch_size=256)
 ```
 
 上述代码放在可抛错的函数或测试内。`Schema::new` 可指定版本、字节序、标签、时间戳、
 排序信息、取值标签和 characteristics。完整公开签名见 [pkg.generated.mbti](pkg.generated.mbti)。
 
 - `open(Bytes) -> Reader`：结构检查并索引。`schema()` 返回独立元数据副本，`row_count()` 返回行数。
+- `column_count()` 返回变量数，`column_indices(names)` 按给定顺序解析变量名。未知名称和重复名称会报错。
+- `each_batch(visit, offset?, limit?, columns?, batch_size?)` 将零起始的绝对行偏移与该批行传给回调。空范围不调用回调，回调报错立即停止。
 - `read_rows(offset?, limit?, columns?)`：零起始行/列索引；越界、负数和重复列报错；省略 limit 读取剩余行。
 - `read()`：完整 Dataset；`select(columns, offset?, limit?)`：带投影后元数据的 Dataset。
 - `verify(batch_size?)`：逐批校验全部行和所有 strL 对象，默认每批 256 行。
