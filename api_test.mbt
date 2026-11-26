@@ -47,3 +47,61 @@ test "public library example" {
   assert_eq(offsets, [0, 1])
   assert_eq(values, [@dta.Text("中文😀"), @dta.Text("")])
 }
+
+///|
+fn test_file() -> (@dta.ScratchFile, Array[Byte]) {
+  let data = []
+  let file : @dta.ScratchFile = {
+    read_at: (pos, n) => Bytes::makei(n, i => data[pos.to_int() + i]),
+    write_at: (pos, bytes) => {
+      let mut i = pos.to_int()
+      for b in bytes {
+        if i == data.length() {
+          data.push(b)
+        } else {
+          data[i] = b
+        }
+        i += 1
+      }
+    },
+  }
+  (file, data)
+}
+
+///|
+test "streamed output matches the public encoder including strL and endianness" {
+  let schema = @dta.Schema::new([
+    @dta.Column::new("text", @dta.StrL),
+    @dta.Column::new("data", @dta.StrL),
+  ])
+  let dataset : @dta.Dataset = {
+    schema,
+    rows: [
+      [@dta.Text("中文"), @dta.Binary(b"abc\\x00")],
+      [@dta.Text("abc"), @dta.Text("中文")],
+      [@dta.Binary(b"abc\\x00"), @dta.Binary(b"")],
+      [@dta.Binary(b""), @dta.Text("")],
+    ],
+  }
+  let lines = []
+  @dta.open(@dta.encode(dataset)).export_jsonl(line => lines.push(line))
+  for version in [118, 119] {
+    for endian in [@dta.Little, @dta.Big] {
+      let input = lines.iter()
+      let (output, bytes) = test_file()
+      let (scratch, _) = test_file()
+      @dta.write_jsonl(
+        () => input.next(),
+        output.write_at,
+        scratch~,
+        version~,
+        endian~,
+      )
+      let expected = @dta.encode({
+        ..dataset,
+        schema: { ..schema, version, endian, },
+      })
+      assert_eq(Bytes::from_array(bytes), expected)
+    }
+  }
+}

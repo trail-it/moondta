@@ -15,6 +15,8 @@ pub fn from_jsonl(() -> String? raise) -> Dataset raise
 
 pub fn open(Bytes) -> Reader raise DtaError
 
+pub fn write_jsonl(() -> String? raise, (Int64, Bytes) -> Unit raise, scratch~ : ScratchFile, version? : Int, endian? : Endian) -> Unit raise
+
 // Errors
 pub(all) suberror DtaError {
   Invalid(offset~ : Int, message~ : String)
@@ -85,6 +87,11 @@ pub(all) struct Schema {
   characteristics : Array[Characteristic]
 } derive(Eq, @debug.Debug)
 pub fn Schema::new(Array[Column], version? : Int, endian? : Endian, label? : String, timestamp? : String, sort_order? : Array[Int], value_labels? : Array[LabelSet], characteristics? : Array[Characteristic]) -> Self
+
+pub(all) struct ScratchFile {
+  read_at : (Int64, Int) -> Bytes raise
+  write_at : (Int64, Bytes) -> Unit raise
+}
 
 pub(all) enum Storage {
   Byte
